@@ -87,6 +87,7 @@ class Game {
       next: () => this.nextEvent(),
       updateSettings: (patch) => this.updateSettings(patch),
       save: () => this.save,
+      inRace: () => this.race !== null && this.mode !== 'menu' && this.mode !== 'results',
       enableTilt: () => this.input.requestTilt(),
     });
 

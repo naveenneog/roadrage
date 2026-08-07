@@ -55,20 +55,24 @@ off by default and can be enabled in Settings (iOS will ask permission).
 ## Testing
 
 ```bash
-npm test           # 152 unit and simulation tests
+npm test           # 212 unit, simulation and regression tests
 npm run typecheck  # tsc --noEmit, strict
 npm run coverage
 npm run gate       # the ironclad gate: the definition of done
 ```
 
-Two harnesses beyond the unit tests:
+Four harnesses beyond the unit tests:
 
 ```bash
-node scripts/balance.ts          # plays every circuit with an AI driver, reports
-                                 # lap times, damage, finishing positions
-node scripts/qa.mjs http://localhost:5173/   # Playwright: real playthrough across
-                                 # four viewports, reports console errors, FPS,
-                                 # overflow, and writes screenshots to ./qa
+npm run balance                # plays every circuit with an AI driver at the
+                               # controls; reports lap times, damage, positions
+npm run qa                     # Playwright: real playthrough across four
+                               # viewports — console errors, FPS, overflow,
+                               # screenshots to ./qa
+npm run qa:campaign            # walks the Auto Rickshaw Edition end to end
+node scripts/qa-circuits.mjs   # one frame from each of the nine circuits,
+                               # checked for contrast so a fogged-out or
+                               # blacked-out circuit cannot ship
 ```
 
 The balance harness is how the game is tuned. It drives the player with the same

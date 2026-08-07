@@ -72,6 +72,27 @@ export const project = (
 };
 
 /**
+ * Where the camera sits along the track, wrapped into the track's own
+ * coordinate space.
+ *
+ * The camera trails the player by a fixed offset, so at the start line and
+ * immediately after every lap crossing the raw value is negative. Segment
+ * lookup wraps, but the projection does not — feeding it a negative z while the
+ * base segment has wrapped to the end of the array makes every segment collapse
+ * onto the vanishing point and the whole world disappears. Wrapping here keeps
+ * the two in the same space.
+ */
+export const cameraPositionFor = (
+  playerZ: number,
+  trailOffset: number,
+  trackLength: number,
+): number => {
+  if (trackLength <= 0) return 0;
+  const raw = (playerZ - trailOffset) % trackLength;
+  return raw < 0 ? raw + trackLength : raw;
+};
+
+/**
  * Exponential distance fog. Indian mornings genuinely have this haze, and it
  * also hides the draw-distance boundary for free.
  */

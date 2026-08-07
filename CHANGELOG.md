@@ -49,6 +49,31 @@ Found by the headless simulation tests, before a pixel was drawn:
 - Rider health never regenerated, making any sufficiently long race unwinnable
   by attrition regardless of how well it was ridden.
 
+Found by a code-review council pass, each with a reproduction:
+
+- **The road vanished for the first 900 units of every lap.** The camera trails
+  the player by a fixed offset, so at the start line its position is negative.
+  Segment *lookup* wrapped that into track space but the *projection* did not,
+  so with the base segment wrapped to the end of the array nearly every segment
+  had a full track length subtracted from an already-negative camera z. Every
+  segment collapsed onto the vanishing point and the back-face cull rejected all
+  of them — measured: 0 segments drawn below `z = 900`, 71 after the fix. This
+  blacked out the road, traffic and rivals for the whole countdown of every race
+  and for ~0.15s at every lap crossing.
+- **Finished rivals were still drawn.** They stop being simulated on finish but
+  were still rendered — frozen, pass-through ghost bikes parked mid-road at the
+  finish line, which the player then drove through on every remaining lap.
+- **`race:finish` could fire twice.** `finishRace` runs synchronously inside
+  `stepField`, and `checkEnding` later in the same tick had no guard, so
+  crossing the line and totalling the bike in one step applied career
+  progression twice.
+- **Settings back-navigation used a stale latch.** Opening Settings from the
+  title screen after any race showed a dead pause menu; opening it from a
+  campaign race dropped to the title with the race still rendering underneath.
+  Now derived from live game state.
+- Rivals on the starting grid rendered several times life size. Entity sprites
+  are now clamped to the player's own on-screen size.
+
 Found by looking at QA screenshots, not by reading exit codes:
 
 - Roadside props were sized from real metres and came out several screen-widths

@@ -254,7 +254,8 @@ export class Race {
     let best = 0;
     let bestDistance = Infinity;
     for (const other of this.racers) {
-      if (other === racer || other.isDown) continue;
+      // A rider who has finished is no longer on the road to be hit.
+      if (other === racer || other.isDown || other.finished) continue;
       const dz = loopDelta(racer.z, other.z, this.road.length);
       if (dz < -160 || dz > 320) continue;
       const dx = other.x - racer.x;
@@ -332,6 +333,11 @@ export class Race {
   }
 
   private checkEnding(): void {
+    // `finishRace` runs synchronously from within `stepField`, so by the time
+    // control reaches here the race may already be over. Without this guard a
+    // player who crosses the line and totals the bike in the same step emits
+    // `race:finish` twice, and the career progression is applied twice.
+    if (this.finished) return;
     if (this.player.isWrecked && !this.player.isDown) {
       this.phase = 'wrecked';
       this.bus.emit('race:finish', { position: this.player.place, timeSeconds: this.elapsed, cash: 0 });

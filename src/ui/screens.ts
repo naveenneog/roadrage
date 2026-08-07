@@ -20,6 +20,8 @@ export interface ScreenActions {
   next(): void;
   updateSettings(patch: Partial<SaveData['settings']>): void;
   save(): SaveData;
+  /** True while a race is in progress, so Settings knows where Back should go. */
+  inRace(): boolean;
   enableTilt(): Promise<boolean>;
 }
 
@@ -46,7 +48,6 @@ const rupees = (amount: number): string => `₹${amount.toLocaleString('en-IN')}
 export class Screens {
   private readonly root: HTMLElement;
   private current: ScreenId | null = null;
-  private pendingCircuit: string | null = null;
 
   constructor(root: HTMLElement, private readonly actions: ScreenActions) {
     this.root = root;
@@ -255,7 +256,6 @@ export class Screens {
     }
 
     card.addEventListener('click', () => {
-      this.pendingCircuit = circuit.id;
       this.actions.startRace(circuit.id, save.currentBike);
     });
     return card;
@@ -452,8 +452,11 @@ export class Screens {
 
     const row = el('div', 'row');
     const back = el('button', 'ghost', '← Back');
+    // Derived from live game state, not from a latch: a stale latch sends you
+    // to a dead pause menu over the title screen, and a missing one drops you
+    // out of a campaign race into the title while the race keeps rendering.
     back.addEventListener('click', () =>
-      this.actions.show(this.pendingCircuit ? 'paused' : 'title'));
+      this.actions.show(this.actions.inRace() ? 'paused' : 'title'));
     row.append(back);
     panel.append(row);
 

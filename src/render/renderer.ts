@@ -1,5 +1,5 @@
 import { clamp, lerp, percentRemaining } from '../core/math.ts';
-import { cameraDepthForFov, fogFactor, project } from '../core/projection.ts';
+import { cameraDepthForFov, cameraPositionFor, fogFactor, project } from '../core/projection.ts';
 import type { CircuitSpec } from '../data/types.ts';
 import type { Race } from '../game/race.ts';
 import type { Racer } from '../game/racer.ts';
@@ -35,6 +35,8 @@ const BASE_FOV = 96;
 const SCENERY_NEAR_Z = 5200;
 /** Scenery fades in across this band so nothing pops into existence. */
 const SCENERY_FADE_Z = 3600;
+/** The player's bike as a fraction of screen height; entities are clamped to it. */
+const PLAYER_SPRITE_HEIGHT = 0.42;
 
 /**
  * Draws one frame of the race.
@@ -116,8 +118,10 @@ export class Renderer {
     this.cameraDepth = cameraDepthForFov(fov);
     this.speedBlur = speedPercent;
 
-    // Camera sits behind the player, on the road surface.
-    const position = player.z - PLAYER_Z_OFFSET;
+    // Camera sits behind the player, on the road surface. The position must be
+    // wrapped into track space or the world vanishes for the first 900 units of
+    // every lap — see `cameraPositionFor`.
+    const position = cameraPositionFor(player.z, PLAYER_Z_OFFSET, road.length);
     const baseSegment = road.findSegment(position);
     const basePercent = percentRemaining(position, SEGMENT_LENGTH);
     const playerSegment = road.findSegment(player.z);
@@ -232,7 +236,9 @@ export class Renderer {
       else byIndex.set(index, [item]);
     };
     for (const racer of race.racers) {
-      if (racer === player) continue;
+      // Finished rivals stop being simulated, so drawing them would park a
+      // frozen, pass-through ghost bike on the racing line at the finish.
+      if (racer === player || racer.finished) continue;
       bucket(road.findSegment(racer.z).index, { kind: 'racer', racer });
     }
     for (const vehicle of race.traffic.vehicles) {
@@ -319,6 +325,11 @@ export class Renderer {
     };
   }
 
+  /** No entity may be drawn larger than the player's own bike is on screen. */
+  private maxEntityWidth(sprite: { width: number; height: number }): number {
+    return (sprite.width / sprite.height) * this.height * PLAYER_SPRITE_HEIGHT * 1.15;
+  }
+
   private drawTraffic(
     ctx: CanvasRenderingContext2D,
     road: Road,
@@ -328,7 +339,7 @@ export class Renderer {
     const at = this.projectEntity(road, vehicle.z, vehicle.x, 0, player);
     if (!at) return;
     const sprite = this.atlas.vehicle(vehicle.spec, Math.abs(Math.round(vehicle.phase)) % 3);
-    const destW = at.w * vehicle.spec.width * 1.9;
+    const destW = Math.min(at.w * vehicle.spec.width * 1.9, this.maxEntityWidth(sprite));
     const destH = (sprite.height / sprite.width) * destW;
     if (destW < 2) return;
     ctx.globalAlpha = at.fog;
@@ -362,7 +373,10 @@ export class Renderer {
     const at = this.projectEntity(road, racer.z, racer.x, racer.y, player);
     if (!at) return;
     const sprite = this.atlas.bike(racer.bike, this.frameFor(racer));
-    const destW = at.w * (racer.bike.threeWheeler ? 0.78 : 0.56);
+    // A rival alongside you should read about the same size as you do; without
+    // the clamp, one on the grid two metres ahead fills a third of the screen.
+    const natural = at.w * (racer.bike.threeWheeler ? 0.78 : 0.56);
+    const destW = Math.min(natural, this.maxEntityWidth(sprite));
     const destH = (sprite.height / sprite.width) * destW;
     if (destW < 2) return;
     ctx.globalAlpha = at.fog;
@@ -375,7 +389,7 @@ export class Renderer {
     const sprite = this.atlas.bike(player.bike, this.frameFor(player));
     // Sized against height rather than width so an ultrawide monitor doesn't get
     // a motorcycle the size of a bus.
-    const destH = this.height * 0.42;
+    const destH = this.height * PLAYER_SPRITE_HEIGHT;
     const destW = (sprite.width / sprite.height) * destH;
     const bob = Math.sin(performance.now() * 0.012) * player.speedPercent * 3;
     const wobble = player.wobble * Math.sin(performance.now() * 0.05) * 12;
