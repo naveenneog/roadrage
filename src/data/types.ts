@@ -90,8 +90,24 @@ export interface SurfacePalette {
   fog: string;
 }
 
-export interface CircuitSpec {
+export interface TrafficSpec {
   id: string;
+  name: string;
+  /** Real cruising speed band in Indian traffic, not the vehicle's top speed. */
+  minKmh: number;
+  maxKmh: number;
+  /** Occupied width in road half-widths. */
+  width: number;
+  /** 0..1 — how much it hurts to hit, and how little it moves when you do. */
+  mass: number;
+  /** 0..1 — tendency to wander across lanes. */
+  weaves: number;
+  /** Body, trim and detail colours for the procedural painter. */
+  palette: [string, string, string];
+  note: string;
+}
+
+export interface CircuitSpec {  id: string;
   name: string;
   city: string;
   /** Shown under the name — the actual street or stretch this is drawn from. */

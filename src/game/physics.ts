@@ -25,6 +25,12 @@ const LAUNCH_SPEED_PERCENT = 0.42;
 const BOOST_DURATION = 1.8;
 const BOOST_COOLDOWN = 7;
 const STAMINA_REGEN_PER_SEC = 15;
+/**
+ * Rider condition recovers slowly while you are upright and not being hit.
+ * Without this, any sufficiently long race is lost to attrition no matter how
+ * well it is ridden, which makes the health bar a countdown rather than a risk.
+ */
+const RIDER_REGEN_PER_SEC = 2;
 const OFF_ROAD_EDGE = 1;
 /** Beyond this you are in the drain, the hoarding or the crowd. */
 const WORLD_EDGE = 2.6;
@@ -114,7 +120,15 @@ export const stepRacer = (
 
 const tickTimers = (racer: Racer, dt: number): void => {
   if (racer.stagger > 0) racer.stagger = Math.max(0, racer.stagger - dt);
-  if (racer.downTimer > 0) racer.downTimer = Math.max(0, racer.downTimer - dt);
+  if (racer.invuln > 0) racer.invuln = Math.max(0, racer.invuln - dt);
+  if (racer.shuntCooldown > 0) racer.shuntCooldown = Math.max(0, racer.shuntCooldown - dt);
+  if (racer.trafficCooldown > 0) racer.trafficCooldown = Math.max(0, racer.trafficCooldown - dt);
+  if (racer.downTimer > 0) {
+    racer.downTimer = Math.max(0, racer.downTimer - dt);
+    // Getting back on the bike is part of the physics step, not something the
+    // race loop has to remember to do. Missing it strands a rider forever.
+    if (racer.downTimer === 0) remount(racer);
+  }
   if (racer.boost > 0) racer.boost = Math.max(0, racer.boost - dt);
   if (racer.boostCooldown > 0) racer.boostCooldown = Math.max(0, racer.boostCooldown - dt);
   if (racer.wobble > 0) racer.wobble = Math.max(0, racer.wobble - dt * 2.2);
@@ -130,6 +144,11 @@ const tickTimers = (racer: Racer, dt: number): void => {
   // Stamina only comes back when you are not swinging.
   if (!racer.attack) {
     racer.stamina = clamp(racer.stamina + STAMINA_REGEN_PER_SEC * dt, 0, 100);
+  }
+
+  // Condition comes back only while upright and unmolested.
+  if (!racer.isDown && racer.stagger <= 0) {
+    racer.riderHealth = clamp(racer.riderHealth + RIDER_REGEN_PER_SEC * dt, 0, 100);
   }
 };
 
@@ -147,7 +166,7 @@ const applyLongitudinal = (
     racer.boostCooldown = BOOST_COOLDOWN + BOOST_DURATION;
   }
 
-  const ceiling = h.maxSpeed * (1 + (racer.boost > 0 ? h.overrev : 0));
+  const ceiling = h.maxSpeed * racer.catchup * (1 + (racer.boost > 0 ? h.overrev : 0));
 
   if (controls.throttle > 0 && !racer.isDown) {
     // Power tails off as revs climb, which is what makes the last 20 km/h feel earned.
@@ -311,12 +330,12 @@ const finishStep = (racer: Racer, road: Road, previousZ: number, result: StepRes
 
 /** Put a rider on the tarmac. Shared by collisions, combat and hitting the scenery. */
 export const knockDown = (racer: Racer, seconds: number): void => {
-  if (racer.isDown) return;
+  if (racer.isDown || racer.invuln > 0) return;
   racer.downTimer = seconds;
   racer.stagger = 0;
   racer.attack = null;
   racer.riderHealth = clamp(racer.riderHealth - 12, 0, 100);
-  racer.bikeDamage = clamp(racer.bikeDamage + 10, 0, 100);
+  racer.bikeDamage = clamp(racer.bikeDamage + 5, 0, 100);
   racer.tilt = 0;
 };
 
@@ -327,6 +346,11 @@ export const remount = (racer: Racer): void => {
   racer.x = clamp(racer.x, -0.8, 0.8);
   racer.lean = 0;
   racer.stamina = Math.max(racer.stamina, 45);
+  // Brief grace: rejoining into the middle of the pack must not mean going
+  // straight back down, which is how a race turns into a softlock.
+  racer.invuln = 1.6;
+  racer.shuntCooldown = 0.5;
+  racer.trafficCooldown = 0.5;
 };
 
 /** Where the racer sits vertically in the world, including hills and air time. */

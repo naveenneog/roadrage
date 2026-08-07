@@ -4,7 +4,7 @@
  */
 export type Listener<T> = (payload: T) => void;
 
-export class EventBus<Events extends Record<string, unknown>> {
+export class EventBus<Events extends Record<PropertyKey, unknown>> {
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
 
   on<K extends keyof Events>(event: K, listener: Listener<Events[K]>): () => void {
@@ -52,7 +52,11 @@ export interface ImpactEvent {
   byPlayer: boolean;
 }
 
-export interface GameEvents {
+/**
+ * Declared as a type alias rather than an interface: only aliases get an implicit
+ * index signature, which is what lets `EventBus<GameEvents>` satisfy its constraint.
+ */
+export type GameEvents = {
   'impact': ImpactEvent;
   'rider:down': { racerId: number; byPlayer: boolean; pan: number };
   'bike:crash': { racerId: number; speed: number };
@@ -70,4 +74,4 @@ export interface GameEvents {
   'fare:reaction': { line: string; mood: 'calm' | 'nervous' | 'terrified' | 'thrilled' };
   'ui:toast': { text: string; tone: 'good' | 'bad' | 'info' };
   'horn': { pan: number; kind: 'auto' | 'truck' | 'bike' };
-}
+};

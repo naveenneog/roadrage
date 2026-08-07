@@ -80,6 +80,12 @@ export class Racer {
   stagger = 0;
   /** Seconds remaining face-down on the road. */
   downTimer = 0;
+  /** Post-remount grace, so you are not instantly re-downed by the pack. */
+  invuln = 0;
+  /** Debounce so one side-swipe is one event, not one per frame. */
+  shuntCooldown = 0;
+  /** Debounce for hitting traffic, for the same reason. */
+  trafficCooldown = 0;
   weapon: WeaponKind | null = null;
   weaponUses = 0;
 
@@ -95,6 +101,12 @@ export class Racer {
 
   /** Set while the three-wheeler is up on two wheels; tips over if it maxes out. */
   tilt = 0;
+
+  /**
+   * Narrow top-speed multiplier used to keep the pack racing. Applied to rivals
+   * only, and deliberately small enough that a good run still wins comfortably.
+   */
+  catchup = 1;
 
   thinkTimer = 0;
   targetLine = 0;
@@ -153,6 +165,9 @@ export class Racer {
     this.attack = null;
     this.stagger = 0;
     this.downTimer = 0;
+    this.invuln = 0;
+    this.shuntCooldown = 0;
+    this.trafficCooldown = 0;
     this.weapon = null;
     this.weaponUses = 0;
     this.lap = 0;
@@ -163,6 +178,7 @@ export class Racer {
     this.boost = 0;
     this.boostCooldown = 0;
     this.tilt = 0;
+    this.catchup = 1;
     this.thinkTimer = 0;
     this.targetLine = x;
   }
