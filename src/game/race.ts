@@ -4,6 +4,7 @@ import { Rng } from '../core/rng.ts';
 import { getBike } from '../data/bikes.ts';
 import type { BikeSpec, CircuitSpec } from '../data/types.ts';
 import { RoadBuilder, type Road, type TrackOp } from '../track/road.ts';
+import { populateScenery } from '../track/scenery.ts';
 import { applyCatchup, RIVAL_NAMES, think, tierForDifficulty } from './ai.ts';
 import {
   attackForButton, beginAttack, resolveHit, resolveShunt, type CombatContext,
@@ -76,6 +77,12 @@ export class Race {
     const builder = new RoadBuilder();
     for (const op of options.circuit.script as TrackOp[]) builder.apply(op);
     this.road = builder.closeLoop().build();
+    populateScenery(
+      this.road,
+      options.circuit.scenery,
+      options.circuit.sceneryDensity,
+      options.circuit.id,
+    );
 
     this.player = new Racer(0, 'player', 'You', options.playerBike);
     this.racers.push(this.player);

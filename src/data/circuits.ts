@@ -28,23 +28,23 @@ const SKY: Record<string, SkyPalette> = {
 
 const TARMAC: SurfacePalette = {
   road: ['#3b3d42', '#37393e'], rumble: ['#c8c9cc', '#a03a34'],
-  lane: '#e6e7ea', grass: ['#4a5a34', '#44532f'], fog: '#c9d4dc',
+  lane: '#e6e7ea', grass: ['#7d6b46', '#736240'], fog: '#c9d4dc',
 };
 const CITY_TARMAC: SurfacePalette = {
   road: ['#35373c', '#313338'], rumble: ['#d5d6d9', '#7d3b38'],
-  lane: '#dcdde0', grass: ['#4d4a42', '#47443d'], fog: '#cbd2d8',
+  lane: '#dcdde0', grass: ['#8a7c62', '#7e7158'], fog: '#cbd2d8',
 };
 const NIGHT_TARMAC: SurfacePalette = {
   road: ['#212429', '#1d2025'], rumble: ['#8b8f96', '#6d2f2c'],
-  lane: '#a8adb5', grass: ['#1c2118', '#191d15'], fog: '#1a2334',
+  lane: '#a8adb5', grass: ['#3c362a', '#353024'], fog: '#1a2334',
 };
 const WET_TARMAC: SurfacePalette = {
   road: ['#2f3338', '#2b2f34'], rumble: ['#b6bac0', '#8a3a35'],
-  lane: '#c8ccd2', grass: ['#3b4a2c', '#354328'], fog: '#95a3ae',
+  lane: '#c8ccd2', grass: ['#4e6032', '#46572c'], fog: '#95a3ae',
 };
 const COAST_TARMAC: SurfacePalette = {
   road: ['#3e4045', '#3a3c41'], rumble: ['#e2e3e5', '#b8544a'],
-  lane: '#f0f1f3', grass: ['#5d6b3a', '#556234'], fog: '#e2d9c4',
+  lane: '#f0f1f3', grass: ['#94854f', '#8a7b48'], fog: '#e2d9c4',
 };
 
 /* ─────────────────────────── scenery mixes ─────────────────────────── */

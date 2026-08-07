@@ -93,7 +93,7 @@ export class Input {
   private tiltSteer = 0;
   private touchPointers = new Map<number, Action[]>();
   private disposers: Array<() => void> = [];
-  private lastTouchAt = 0;
+  private lastTouchAt = -1e9;
 
   readonly options: InputOptions = { tilt: false, tiltRange: 22, invertTilt: false };
 
