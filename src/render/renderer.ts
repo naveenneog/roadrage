@@ -7,8 +7,10 @@ import type { TrafficVehicle } from '../game/traffic.ts';
 import { DEFAULT_ROAD_WIDTH, SEGMENT_LENGTH, type Road, type Segment } from '../track/road.ts';
 import { SpriteAtlas } from './atlas.ts';
 import { Background } from './background.ts';
+import { Effects } from './effects.ts';
 import { Painter } from './painter.ts';
-import { darken, mix, withAlpha } from './palette.ts';
+import { mix } from './palette.ts';
+import { paintSegment } from './road-painter.ts';
 import type { BikeFrameOptions } from './sprites/bike.ts';
 import { propWorldWidth } from './sprites/props.ts';
 
@@ -34,10 +36,6 @@ const SCENERY_NEAR_Z = 5200;
 /** Scenery fades in across this band so nothing pops into existence. */
 const SCENERY_FADE_Z = 3600;
 
-interface Particle {
-  x: number; y: number; vx: number; vy: number; life: number; max: number; colour: string; size: number;
-}
-
 /**
  * Draws one frame of the race.
  *
@@ -46,26 +44,24 @@ interface Particle {
  * both edges, and fill the quad between them. Everything else — scenery,
  * traffic, rivals — is sorted into segments and drawn back to front on the
  * return pass so the painter's algorithm handles occlusion for free.
+ *
+ * Screen-space presentation (particles, speed lines, grade, flash) lives in
+ * `Effects`; this class is only concerned with the world.
  */
 export class Renderer {
   readonly atlas: SpriteAtlas;
   readonly background = new Background();
+  readonly effects: Effects;
   quality: RenderQuality = QUALITY.high;
 
   private width = 0;
   private height = 0;
   private cameraDepth = cameraDepthForFov(BASE_FOV);
-  private particles: Particle[] = [];
   private shakeX = 0;
   private shakeY = 0;
-  private flash = 0;
-  private flashColour = '#ffffff';
   private speedBlur = 0;
   /** Blended from the circuit's haze and its surface fog when a race is prepared. */
   private fogColour = '#c9d4dc';
-  /** Pre-rendered colour grade and vignette — see `drawGrade`. */
-  private gradeLayer: HTMLCanvasElement | null = null;
-  private gradeKey = '';
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
@@ -73,6 +69,10 @@ export class Renderer {
   ) {
     this.atlas = new SpriteAtlas(quality);
     this.quality = QUALITY[quality];
+    this.effects = new Effects({
+      particles: this.quality.particles,
+      speedLines: this.quality.speedLines,
+    });
   }
 
   resize(width: number, height: number): void {
@@ -82,82 +82,20 @@ export class Renderer {
 
   /** Flash the screen — used for heavy impacts and the finish line. */
   punch(colour: string, strength: number): void {
-    this.flash = Math.max(this.flash, strength);
-    this.flashColour = colour;
+    this.effects.punch(colour, strength);
   }
 
   spawnImpact(screenX: number, screenY: number, power: number, colour: string): void {
-    if (!this.quality.particles) return;
-    const count = Math.round(6 + power * 18);
-    for (let i = 0; i < count; i++) {
-      const angle = Painter.noise(i * 3.1 + screenX) * Math.PI * 2;
-      const speed = (60 + Painter.noise(i * 7.7) * 260) * (0.4 + power);
-      this.particles.push({
-        x: screenX, y: screenY,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 60,
-        life: 0, max: 0.28 + Painter.noise(i) * 0.4,
-        colour, size: 2 + Painter.noise(i * 5) * 4,
-      });
-    }
-    if (this.particles.length > 320) this.particles.splice(0, this.particles.length - 320);
+    this.effects.spawnImpact(screenX, screenY, power, colour);
   }
 
-  private stepParticles(dt: number): void {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i] as Particle;
-      p.life += dt;
-      if (p.life >= p.max) {
-        this.particles.splice(i, 1);
-        continue;
-      }
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vy += 900 * dt;
-      p.vx *= 1 - dt * 1.6;
-    }
-  }
-
-  /** Rebuild the background layers when the circuit changes. */
+  /** Rebuild the background and grade layers when the circuit changes. */
   prepare(circuit: CircuitSpec, road: Road): void {
     this.background.build(circuit.sky, circuit.timeOfDay, circuit.city, this.width, this.height);
     this.fogColour = mix(circuit.surface.fog, circuit.sky.haze, 0.68);
-    this.buildGrade(circuit);
+    this.effects.buildGrade(circuit, this.width, this.height);
+    this.effects.clear();
     void road;
-  }
-
-  /**
-   * The colour grade and vignette are a fixed, full-screen composite. Rebuilding
-   * them every frame costs several milliseconds at 1080p for a result that never
-   * changes, so they are rasterised once per circuit and blitted.
-   */
-  private buildGrade(circuit: CircuitSpec): void {
-    const key = `${circuit.id}:${this.width}x${this.height}`;
-    if (this.gradeKey === key) return;
-    this.gradeKey = key;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, this.width);
-    canvas.height = Math.max(1, this.height);
-    const gctx = canvas.getContext('2d');
-    if (!gctx) return;
-
-    const { grade, gradeAlpha } = circuit.sky;
-    if (gradeAlpha > 0) {
-      gctx.fillStyle = withAlpha(grade, gradeAlpha);
-      gctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    const vignette = gctx.createRadialGradient(
-      canvas.width / 2, canvas.height * 0.55, canvas.width * 0.22,
-      canvas.width / 2, canvas.height * 0.55, canvas.width * 0.78,
-    );
-    vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, `rgba(0,0,0,${circuit.timeOfDay === 'night' ? 0.55 : 0.32})`);
-    gctx.fillStyle = vignette;
-    gctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    this.gradeLayer = canvas;
   }
 
   render(race: Race, circuit: CircuitSpec, dt: number, showDebug = false): void {
@@ -170,7 +108,7 @@ export class Renderer {
     const player = race.player;
     const speedPercent = player.speedPercent;
 
-    this.stepParticles(dt);
+    this.effects.step(dt);
 
     // Widening the field of view with speed is the cheapest and strongest
     // sensation-of-speed trick there is.
@@ -195,8 +133,8 @@ export class Renderer {
     ctx.save();
     ctx.translate(this.shakeX, this.shakeY);
 
-    // Horizon estimate for the background: where the far end of the road lands.
-    const horizon = height / 2 - (CAMERA_HEIGHT * 0) - 0;
+    // The vanishing point sits on the camera axis, which is the screen centre.
+    const horizon = height / 2;
     this.background.update(dt, playerSegment.curve, speedPercent, 0);
     this.background.draw(ctx, width, height, horizon);
 
@@ -206,10 +144,10 @@ export class Renderer {
 
     ctx.restore();
 
-    this.drawSpeedLines(ctx, width, height, speedPercent, player.boost > 0);
-    this.drawGrade(ctx, circuit, width, height);
-    this.drawParticles(ctx);
-    this.drawFlash(ctx, width, height, dt);
+    this.effects.drawSpeedLines(ctx, width, height, speedPercent, player.boost > 0);
+    this.effects.drawGrade(ctx, width, height);
+    this.effects.drawParticles(ctx);
+    this.effects.drawFlash(ctx, width, height);
 
     if (showDebug) this.drawDebug(ctx, race);
   }
@@ -270,108 +208,8 @@ export class Renderer {
     surface: CircuitSpec['surface'],
     depth: number,
   ): void {
-    const p1 = segment.p1.screen;
-    const p2 = segment.p2.screen;
-    const light = segment.light ? 0 : 1;
-    const width = this.width;
-
-    let road = surface.road[light] as string;
-    let grass = surface.grass[light] as string;
-    const rumble = surface.rumble[light] as string;
-
-    // Surface changes recolour the tarmac rather than needing separate palettes.
-    if (segment.surface === 'cobble') road = mix(road, '#6a6258', 0.55);
-    else if (segment.surface === 'broken') road = mix(road, '#55504a', 0.45);
-    else if (segment.surface === 'mud') road = mix(road, '#5c4a34', 0.6);
-    else if (segment.surface === 'wet') road = darken(road, 0.18);
-    else if (segment.surface === 'concrete') road = mix(road, '#7a7d82', 0.35);
-    if (segment.covered) {
-      road = darken(road, 0.42);
-      grass = darken(grass, 0.5);
-    }
-
-    // Verge.
-    this.quad(ctx, 0, p1.y, width, 0, p2.y, width, grass);
-
-    // Rumble strips just outside the tarmac.
-    const r1 = p1.w / 5;
-    const r2 = p2.w / 5;
-    this.quad(ctx, p1.x, p1.y, p1.w + r1, p2.x, p2.y, p2.w + r2, rumble);
-
-    // Tarmac.
-    this.quad(ctx, p1.x, p1.y, p1.w, p2.x, p2.y, p2.w, road);
-
-    // Lane markings, only on the light segments so they dash naturally.
-    if (segment.light && p1.w > 8 && segment.surface !== 'mud') {
-      const l1 = p1.w / 28;
-      const l2 = p2.w / 28;
-      this.quad(ctx, p1.x, p1.y, l1, p2.x, p2.y, l2, withAlpha(surface.lane, 0.55));
-    }
-
-    // Hazards drawn onto the road surface.
-    if (segment.hazard) this.drawHazard(ctx, segment, p1, p2);
-
-    // Distance fog, laid over each quad so it costs nothing extra. The colour
-    // comes from the sky's own haze, so the far end of the road always melts
-    // into the horizon rather than ending in a grey band.
-    if (segment.fog < 1) {
-      ctx.fillStyle = withAlpha(this.fogColour, 1 - segment.fog);
-      ctx.fillRect(0, p2.y, width, p1.y - p2.y + 1);
-    }
+    paintSegment(ctx, segment, surface, this.width, this.fogColour);
     void depth;
-  }
-
-  private drawHazard(
-    ctx: CanvasRenderingContext2D,
-    segment: Segment,
-    p1: { x: number; y: number; w: number },
-    p2: { x: number; y: number; w: number },
-  ): void {
-    switch (segment.hazard) {
-      case 'breaker': {
-        // Painted yellow-and-black bar across the carriageway.
-        this.quad(ctx, p1.x, p1.y, p1.w, p2.x, p2.y, p2.w, '#e8c02a');
-        const step = p1.w / 4;
-        for (let i = -2; i < 2; i += 2) {
-          this.quad(ctx, p1.x + i * step, p1.y, step * 0.5,
-            p2.x + i * (p2.w / 4), p2.y, (p2.w / 4) * 0.5, '#1c1e22');
-        }
-        break;
-      }
-      case 'pothole': {
-        const cx1 = p1.x + segment.hazardOffset * p1.w;
-        const cx2 = p2.x + segment.hazardOffset * p2.w;
-        this.quad(ctx, cx1, p1.y, p1.w * 0.16, cx2, p2.y, p2.w * 0.16, '#15171b');
-        break;
-      }
-      case 'oil':
-      case 'puddle': {
-        this.quad(ctx, p1.x, p1.y, p1.w * 0.7, p2.x, p2.y, p2.w * 0.7,
-          withAlpha('#0e1218', 0.45));
-        break;
-      }
-      case 'gravel': {
-        this.quad(ctx, p1.x, p1.y, p1.w, p2.x, p2.y, p2.w, withAlpha('#8a8272', 0.5));
-        break;
-      }
-    }
-  }
-
-  /** A road quad: two horizontal spans joined into a trapezium. */
-  private quad(
-    ctx: CanvasRenderingContext2D,
-    x1: number, y1: number, w1: number,
-    x2: number, y2: number, w2: number,
-    fill: string,
-  ): void {
-    ctx.fillStyle = fill;
-    ctx.beginPath();
-    ctx.moveTo(x1 - w1, y1);
-    ctx.lineTo(x2 - w2, y2);
-    ctx.lineTo(x2 + w2, y2);
-    ctx.lineTo(x1 + w1, y1);
-    ctx.closePath();
-    ctx.fill();
   }
 
   /* ─────────────────────── scenery, traffic, rivals ─────────────────────── */
@@ -560,72 +398,6 @@ export class Renderer {
     void race;
   }
 
-  /* ───────────────────────────── effects ───────────────────────────── */
-
-  private drawSpeedLines(
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-    speedPercent: number,
-    boosting: boolean,
-  ): void {
-    if (!this.quality.speedLines) return;
-    const intensity = Math.max(0, speedPercent - 0.55) / 0.45;
-    if (intensity <= 0 && !boosting) return;
-
-    const strength = clamp(intensity + (boosting ? 0.45 : 0), 0, 1.2);
-    const count = Math.round(14 + strength * 26);
-    const t = performance.now() * 0.001;
-    ctx.save();
-    ctx.strokeStyle = withAlpha(boosting ? '#ffd28a' : '#ffffff', 0.10 + strength * 0.22);
-    ctx.lineWidth = 2;
-    for (let i = 0; i < count; i++) {
-      const a = Painter.noise(i * 3.7) * Math.PI * 2 + t * 0.6;
-      const r0 = width * (0.16 + Painter.noise(i * 5.1) * 0.10);
-      const r1 = r0 + width * (0.08 + strength * 0.22);
-      const cx = width / 2;
-      const cy = height * 0.56;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0 * 0.6);
-      ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1 * 0.6);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  /** A single pre-rendered wash that sells the hour more cheaply than any lighting model. */
-  private drawGrade(
-    ctx: CanvasRenderingContext2D,
-    circuit: CircuitSpec,
-    width: number,
-    height: number,
-  ): void {
-    if (!this.gradeLayer) this.buildGrade(circuit);
-    if (this.gradeLayer) ctx.drawImage(this.gradeLayer, 0, 0, width, height);
-  }
-
-  private drawParticles(ctx: CanvasRenderingContext2D): void {
-    for (const p of this.particles) {
-      const t = 1 - p.life / p.max;
-      ctx.globalAlpha = t * t;
-      ctx.fillStyle = p.colour;
-      ctx.fillRect(p.x, p.y, p.size, p.size);
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  private drawFlash(
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-    dt: number,
-  ): void {
-    if (this.flash <= 0) return;
-    ctx.fillStyle = withAlpha(this.flashColour, this.flash * 0.5);
-    ctx.fillRect(0, 0, width, height);
-    this.flash = Math.max(0, this.flash - dt * 4);
-  }
-
   private drawDebug(ctx: CanvasRenderingContext2D, race: Race): void {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -634,7 +406,7 @@ export class Renderer {
     ctx.font = '12px ui-monospace, monospace';
     const lines = [
       `sprites  ${this.atlas.size}`,
-      `parts    ${this.particles.length}`,
+      `parts    ${this.effects.particleCount}`,
       `blur     ${this.speedBlur.toFixed(2)}`,
       `phase    ${race.phase}`,
       `shake    ${race.shake.toFixed(2)}`,

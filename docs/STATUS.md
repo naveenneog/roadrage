@@ -1,39 +1,37 @@
-# Road Rash Bharat — Status
+# Status
 
-> The first file any session reads. Write it as a handover note to someone who knows nothing.
+## Active packet
 
-**Active packet:** P-1 — <behaviour>
-**State:** PLAN
-<!-- PLAN → CONTRACT → RED → GREEN → REFACTOR → COUNCIL → GATE → DONE -->
-**Branch:** main
+**P-17 Mobile** — complete. The project is between milestones; the next packet is
+**P-18 Rider damage feedback** from `docs/ROADMAP.md`.
 
-## Acceptance criteria
-- [ ] Given <precondition>, when <action>, then <observable result>
-- [ ] <edge / failure case>
+## Acceptance criteria for P-17 (met)
 
-## Commands that prove it
+- Given a phone in landscape, when the game loads, then thumb controls appear on
+  first touch and fade out again when a keyboard is used.
+- Given any of the four target viewports, when a race is played for six seconds,
+  then the frame rate holds at 60 and there are no console errors.
+- Given a portrait phone, when the game loads, then a rotate prompt is shown
+  instead of an unplayable road.
+- Given a second visit offline, when the game loads, then it starts from the
+  service worker cache.
+
+## What proves it
+
 ```
-<declare commands.test in .ironclad/charter.json>
-node .ironclad/gate.mjs --stage packet
+npm test                                     152 passed
+npm run typecheck                            clean, strict
+npm run build                                clean
+node scripts/balance.ts                      9/9 circuits completable
+node scripts/qa.mjs http://localhost:5180/   4/4 viewports, 60 fps, 0 errors
+node .ironclad/gate.mjs --stage packet       exit 0
 ```
 
-## Council verdicts (this packet)
-| Role | Verdict | Notes |
-|---|---|---|
-| Architect | — | |
-| Coder | — | |
-| QA | — | |
-| UX | — | |
-| Security | — | |
+QA screenshots for all four viewports are written to `./qa` and were reviewed by
+eye, not just by exit code. Three rendering defects were found that way and are
+recorded in `CHANGELOG.md`.
 
 ## Open unknowns
-<!-- IDs from docs/UNKNOWNS.md that block or shape this packet -->
-—
 
-## Last completed
-—
-
-## Notes for the next session
-<!-- What you'd want to be told if you woke up here with no memory.
-     Half-finished threads, traps, things that look wrong but aren't. -->
-—
+None blocking. See `docs/UNKNOWNS.md` for what was researched and what remains an
+explicitly labelled assumption.

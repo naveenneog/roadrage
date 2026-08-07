@@ -2,7 +2,6 @@ import './styles.css';
 
 import { GameLoop } from './core/loop.ts';
 import { Input, type InputSnapshot } from './core/input.ts';
-import { clamp, loopDelta } from './core/math.ts';
 import { defaultSave, loadSave, writeSave, type SaveData } from './core/storage.ts';
 import { AudioDirector, type EngineTarget } from './audio/director.ts';
 import { AUTO_LIVERIES, AUTO_RICKSHAW, getBike } from './data/bikes.ts';
@@ -10,11 +9,17 @@ import { CAREER_ORDER, getCircuit } from './data/circuits.ts';
 import type { CircuitSpec } from './data/types.ts';
 import { Race } from './game/race.ts';
 import { tierForDifficulty } from './game/ai.ts';
+import { engineBroadcast, musicIntensity } from './game/broadcast.ts';
+import {
+  applyCampaignResult, applyRaceResult, canEnter, nextEvent, payEntry, purchase, selectBike,
+} from './game/career.ts';
 import type { Controls } from './game/physics.ts';
 import { Hud } from './render/hud.ts';
-import { QUALITY, Renderer } from './render/renderer.ts';
-import { sceneryIds } from './track/scenery.ts';
+import { Renderer } from './render/renderer.ts';
+import { warmForRace } from './render/warmup.ts';
 import { getTraffic } from './data/traffic.ts';
+import { attachPresentation } from './ui/presenter.ts';
+import { fitCanvas, resolveQuality, type QualityLevel } from './ui/viewport.ts';
 import {
   CAMPAIGN_CHAPTERS, Screens, type CampaignChapter, type ResultsPayload, type ScreenId,
 } from './ui/screens.ts';
@@ -51,9 +56,7 @@ class Game {
   private readonly screens: Screens;
   private readonly loop: GameLoop;
 
-  private dpr = 1;
-  private cssWidth = 0;
-  private cssHeight = 0;
+  private readonly qualityLevel: QualityLevel;
   private lastSnapshot: InputSnapshot | null = null;
   private takedowns = 0;
   private topSpeed = 0;
@@ -65,7 +68,8 @@ class Game {
     private readonly ctx: CanvasRenderingContext2D,
     uiRoot: HTMLElement,
   ) {
-    const quality = this.resolveQuality();
+    const quality = resolveQuality(this.save.settings.quality);
+    this.qualityLevel = quality;
     this.renderer = new Renderer(ctx, quality);
     this.input = new Input(canvas);
     this.input.attach();
@@ -100,18 +104,6 @@ class Game {
 
   /* ─────────────────────────── setup ─────────────────────────── */
 
-  private resolveQuality(): 'low' | 'medium' | 'high' {
-    const setting = this.save.settings.quality;
-    if (setting !== 'auto') return setting;
-    // Coarse capability guess: pixel budget and core count are the two signals
-    // available before a single frame has been drawn.
-    const pixels = window.innerWidth * window.innerHeight * (window.devicePixelRatio || 1);
-    const cores = navigator.hardwareConcurrency ?? 4;
-    if (pixels > 3_500_000 && cores >= 8) return 'high';
-    if (pixels > 1_200_000 && cores >= 4) return 'medium';
-    return 'low';
-  }
-
   private bindGlobalEvents(): void {
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('orientationchange', () => window.setTimeout(() => this.resize(), 120));
@@ -134,26 +126,10 @@ class Game {
   }
 
   private resize(): void {
-    this.dpr = Math.min(window.devicePixelRatio || 1, this.renderer.quality === QUALITY.low ? 1.25 : 2);
-    this.cssWidth = window.innerWidth;
-    this.cssHeight = window.innerHeight;
-
-    // Cap the internal resolution: on a 3x phone a full-res canvas is three
-    // times the fill rate for no visible gain at these sprite sizes.
-    const maxPixels = this.renderer.quality === QUALITY.high ? 2_600_000 : 1_400_000;
-    let scale = this.dpr;
-    while (this.cssWidth * this.cssHeight * scale * scale > maxPixels && scale > 0.6) scale -= 0.1;
-
-    this.canvas.width = Math.round(this.cssWidth * scale);
-    this.canvas.height = Math.round(this.cssHeight * scale);
-    this.canvas.style.width = `${this.cssWidth}px`;
-    this.canvas.style.height = `${this.cssHeight}px`;
-    this.renderer.resize(this.canvas.width, this.canvas.height);
+    const size = fitCanvas(this.canvas, this.qualityLevel);
+    this.renderer.resize(size.pixelWidth, size.pixelHeight);
     if (this.circuit && this.race) this.renderer.prepare(this.circuit, this.race.road);
-
-    // Portrait on a phone is unplayable for this game; ask for landscape.
-    const portraitPhone = this.cssHeight > this.cssWidth && Math.min(this.cssWidth, this.cssHeight) < 560;
-    if (rotateHint) rotateHint.hidden = !portraitPhone;
+    if (rotateHint) rotateHint.hidden = !size.needsRotation;
   }
 
   private applyVolumes(): void {
@@ -169,8 +145,8 @@ class Game {
 
   private beginRace(circuitId: string, bikeId: string): void {
     const circuit = getCircuit(circuitId);
-    if (this.save.cash < circuit.entryFee) return;
-    this.save.cash -= circuit.entryFee;
+    if (!canEnter(this.save, circuit)) return;
+    this.save = payEntry(this.save, circuit);
     this.chapter = null;
     this.launch(circuit, getBike(bikeId), 5, undefined);
   }
@@ -231,16 +207,12 @@ class Game {
 
     // Rasterise every sprite this circuit can show before the flag drops, so no
     // frame during the race pays for a first-time draw.
-    const livery = bike.threeWheeler
-      ? AUTO_LIVERIES[circuit.city] ?? AUTO_LIVERIES.mumbai
-      : undefined;
-    this.renderer.atlas.warmBike(bike, livery);
-    for (const racer of race.racers) this.renderer.atlas.warmBike(racer.bike);
-    this.renderer.atlas.warmCircuit(
-      sceneryIds(race.road, circuit.scenery),
+    warmForRace(
+      this.renderer, circuit, race.road, bike,
+      race.racers.map((r) => r.bike),
       circuit.traffic.map((t) => getTraffic(t.id)),
+      bike.threeWheeler ? AUTO_LIVERIES[circuit.city] ?? AUTO_LIVERIES.mumbai : undefined,
     );
-    this.renderer.prepare(circuit, race.road);
 
     this.screens.hide();
     this.mode = 'racing';
@@ -249,30 +221,18 @@ class Game {
   }
 
   private wireRaceEvents(race: Race, circuit: CircuitSpec, chapter?: CampaignChapter): void {
-    this.detachAudio = this.audio.attach(race.bus);
-
-    race.bus.on('ui:toast', ({ text, tone }) => this.hud.toast(text, tone));
-    race.bus.on('race:countdown', ({ count }) => {
-      if (count <= 0) this.hud.toast('GO', 'good');
+    const detachAudio = this.audio.attach(race.bus);
+    const detachPresentation = attachPresentation(race.bus, {
+      hud: this.hud,
+      renderer: this.renderer,
+      impactOrigin: () => ({ x: this.canvas.width / 2, y: this.canvas.height * 0.72 }),
+      onTakedown: () => { this.takedowns++; },
+      onFinish: (payload) => this.finish(payload, circuit, chapter),
     });
-    race.bus.on('rider:down', ({ byPlayer }) => {
-      if (!byPlayer) return;
-      this.takedowns++;
-      this.hud.toast('TAKEDOWN', 'good');
-      this.renderer.punch('#ffffff', 0.35);
-    });
-    race.bus.on('impact', ({ power, byPlayer, kind }) => {
-      if (!byPlayer || power < 0.35) return;
-      const colour = kind === 'traffic' || kind === 'wall' ? '#e8543f' : '#ffd28a';
-      this.renderer.spawnImpact(this.canvas.width / 2, this.canvas.height * 0.72, power, colour);
-      if (power > 0.7) this.renderer.punch(colour, power * 0.4);
-    });
-    race.bus.on('weapon:pickup', ({ weapon }) => this.hud.toast(weapon.toUpperCase(), 'good'));
-    race.bus.on('cop:spotted', ({ level }) =>
-      this.hud.toast(level > 1 ? 'MORE POLICE' : 'POLICE', 'bad'));
-    race.bus.on('story:beat', ({ speaker, line, durationMs }) =>
-      this.hud.say(speaker, line, durationMs));
-    race.bus.on('race:finish', (payload) => this.finish(payload, circuit, chapter));
+    this.detachAudio = () => {
+      detachAudio();
+      detachPresentation();
+    };
   }
 
   /* ─────────────────────────── frame ─────────────────────────── */
@@ -329,42 +289,10 @@ class Game {
   private readonly engineTargets: EngineTarget[] = [];
 
   private updateAudio(race: Race, dt: number): void {
-    this.engineTargets.length = 0;
-    const player = race.player;
-
-    this.engineTargets.push({
-      id: player.id,
-      bike: player.bike,
-      throttle: this.lastSnapshot?.throttle ?? 0,
-      speedPercent: player.speedPercent,
-      pan: 0,
-      distance: 0,
-    });
-
-    // Only the four nearest rivals get a voice; beyond that they are inaudible
-    // under your own engine anyway, and each voice costs a handful of nodes.
-    const nearby = race.racers
-      .filter((r) => r !== player && !r.finished)
-      .map((r) => ({ racer: r, gap: loopDelta(player.z, r.z, race.road.length) }))
-      .filter((entry) => Math.abs(entry.gap) < 6000)
-      .sort((a, b) => Math.abs(a.gap) - Math.abs(b.gap))
-      .slice(0, 4);
-
-    for (const { racer, gap } of nearby) {
-      this.engineTargets.push({
-        id: racer.id,
-        bike: racer.bike,
-        throttle: racer.isDown ? 0 : 0.7,
-        speedPercent: racer.speedPercent,
-        pan: clamp((racer.x - player.x) * 0.8, -1, 1),
-        distance: clamp(Math.abs(gap) / 6000, 0, 1),
-      });
-    }
-
+    // The simulation broadcasts plain data; audio never reaches into game state.
+    engineBroadcast(race, this.lastSnapshot?.throttle ?? 0, this.engineTargets);
     this.audio.updateEngines(this.engineTargets, dt);
-    // Music intensity rises with speed and with how close the fight is.
-    const pressure = nearby.length > 0 ? 1 - clamp(Math.abs(nearby[0]!.gap) / 6000, 0, 1) : 0;
-    this.audio.updateMusic(dt, 0.45 + player.speedPercent * 0.35 + pressure * 0.25);
+    this.audio.updateMusic(dt, musicIntensity(race));
   }
 
   private draw(): void {
@@ -428,13 +356,9 @@ class Game {
 
   private nextEvent(): void {
     const currentId = this.circuit?.id;
-    const index = currentId ? CAREER_ORDER.indexOf(currentId) : -1;
-    const nextId = index >= 0 ? CAREER_ORDER[index + 1] : undefined;
-    if (nextId && this.save.unlockedCircuits.includes(nextId)) {
-      this.beginRace(nextId, this.save.currentBike);
-    } else {
-      this.screens.show('circuits');
-    }
+    const nextId = currentId ? nextEvent(this.save, currentId, CAREER_ORDER) : null;
+    if (nextId) this.beginRace(nextId, this.save.currentBike);
+    else this.screens.show('circuits');
   }
 
   private finish(
@@ -448,57 +372,50 @@ class Game {
 
     const wrecked = race.phase === 'wrecked';
     const won = payload.position === 1 && !wrecked;
-    let cash = wrecked ? 0 : payload.cash;
-    let unlocked: string | null = null;
 
-    this.save.races++;
-    this.save.takedowns += this.takedowns;
-    if (won) this.save.wins++;
+    // All progression maths lives in `game/career.ts` so it can be tested
+    // without a canvas, an AudioContext or a nine-race playthrough.
+    const change = chapter
+      ? applyCampaignResult(
+          this.save,
+          {
+            chapterIndex: CAMPAIGN_CHAPTERS.indexOf(chapter),
+            survived: !wrecked,
+            reward: chapter.reward,
+          },
+          CAMPAIGN_CHAPTERS.length,
+          (i) => CAMPAIGN_CHAPTERS[i]?.title ?? '',
+        )
+      : applyRaceResult(
+          this.save,
+          {
+            circuitId: circuit.id,
+            position: payload.position,
+            timeSeconds: payload.timeSeconds,
+            wrecked,
+            takedowns: this.takedowns,
+            prize: payload.cash,
+          },
+          CAREER_ORDER,
+          (id) => getCircuit(id).name,
+        );
 
-    // Campaign chapters pay a flat fee for surviving, not for winning: you are
-    // not trying to beat these people, you are trying to still be moving.
-    if (chapter) {
-      const survived = !wrecked;
-      cash = survived ? chapter.reward : 0;
-      if (survived) {
-        const index = CAMPAIGN_CHAPTERS.indexOf(chapter);
-        if (index === this.save.storyChapter && index + 1 < CAMPAIGN_CHAPTERS.length) {
-          this.save.storyChapter = index + 1;
-          unlocked = CAMPAIGN_CHAPTERS[index + 1]?.title ?? null;
-        }
-      }
-    } else if (won) {
-      const index = CAREER_ORDER.indexOf(circuit.id);
-      const nextId = CAREER_ORDER[index + 1];
-      if (nextId && !this.save.unlockedCircuits.includes(nextId)) {
-        this.save.unlockedCircuits.push(nextId);
-        unlocked = getCircuit(nextId).name;
-      }
-    }
-
-    const previousBest = this.save.bestTimes[circuit.id];
-    const isBest = !wrecked && (previousBest === undefined || payload.timeSeconds < previousBest);
-    if (isBest) this.save.bestTimes[circuit.id] = payload.timeSeconds;
-
-    this.save.cash += cash;
+    this.save = change.save;
     this.persist();
-
-    const index = CAREER_ORDER.indexOf(circuit.id);
-    const nextId = CAREER_ORDER[index + 1];
 
     const results: ResultsPayload = {
       circuitName: circuit.name,
       position: payload.position,
       fieldSize: race.racers.length,
       timeSeconds: payload.timeSeconds,
-      cash,
+      cash: change.cash,
       takedowns: this.takedowns,
       damage: race.player.bikeDamage,
       topSpeed: this.topSpeed,
       wrecked,
-      best: isBest,
-      unlocked,
-      canContinue: !chapter && !!nextId && this.save.unlockedCircuits.includes(nextId),
+      best: change.personalBest,
+      unlocked: change.unlocked,
+      canContinue: !chapter && nextEvent(this.save, circuit.id, CAREER_ORDER) !== null,
     };
 
     this.audio.playMusic(won ? 'victory' : 'menu');
@@ -508,20 +425,19 @@ class Game {
   /* ─────────────────────────── save actions ─────────────────────────── */
 
   private buyBike(id: string): boolean {
-    const bike = getBike(id);
-    if (this.save.ownedBikes.includes(id)) return true;
-    if (this.save.cash < bike.price) return false;
-    this.save.cash -= bike.price;
-    this.save.ownedBikes.push(id);
-    this.save.currentBike = id;
+    const result = purchase(this.save, getBike(id));
+    if (result.reason === 'already-owned') return true;
+    if (!result.bought) return false;
+    this.save = result.save;
     this.persist();
     this.audio.sfx.chime(true);
     return true;
   }
 
   private selectBike(id: string): void {
-    if (!this.save.ownedBikes.includes(id)) return;
-    this.save.currentBike = id;
+    const next = selectBike(this.save, id);
+    if (next === this.save) return;
+    this.save = next;
     this.persist();
     this.audio.sfx.tick();
   }
