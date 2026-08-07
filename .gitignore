@@ -13,6 +13,7 @@ dev-dist/
 
 # QA artifacts
 qa/
+qa-dist/
 coverage/
 test-results/
 playwright-report/

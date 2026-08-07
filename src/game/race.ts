@@ -67,6 +67,7 @@ export class Race {
   private readonly rng: Rng;
   private readonly stepResult: StepResult = { lapped: false, jolt: 0, launched: false, landed: false };
   private readonly combatContext: CombatContext;
+  private readonly policeEnabled: boolean;
   private finishOrder = 0;
 
   constructor(options: RaceOptions) {
@@ -92,7 +93,9 @@ export class Race {
     this.racers.push(...grid);
 
     this.traffic = new TrafficField(this.road, options.circuit, this.rng);
-    if (options.policeEnabled === false) this.police.reset();
+    // The campaign runs its own threat — hunters, not traffic police — so the
+    // heat system is switched off for the whole race rather than merely reset.
+    this.policeEnabled = options.policeEnabled !== false;
 
     this.combatContext = {
       bus: this.bus,
@@ -238,7 +241,9 @@ export class Race {
           });
         }
       }
-      if (racer === this.player && this.stepResult.launched) this.police.provoke(4);
+      if (racer === this.player && this.stepResult.launched) {
+        if (this.policeEnabled) this.police.provoke(4);
+      }
 
       if (racer.lap > before) this.onLap(racer);
     }
@@ -275,7 +280,7 @@ export class Race {
         if (byPlayer) {
           this.hitstop = Math.max(this.hitstop, hit.power * 0.06);
           this.shake = Math.min(1, this.shake + hit.power * 0.8);
-          this.police.provoke(hit.power * 18);
+          if (this.policeEnabled) this.police.provoke(hit.power * 18);
         }
         if (hit.knockedDown) {
           this.bus.emit('rider:down', { racerId: a.id, byPlayer: false, pan: clamp(a.x, -1, 1) });
@@ -288,7 +293,7 @@ export class Race {
         resolveHit(a, b, this.combatContext);
         resolveHit(b, a, this.combatContext);
         if (resolveShunt(a, b, this.combatContext) && (a === this.player || b === this.player)) {
-          this.police.provoke(3);
+          if (this.policeEnabled) this.police.provoke(3);
         }
       }
     }
@@ -319,6 +324,7 @@ export class Race {
   }
 
   private checkPolice(dt: number): void {
+    if (!this.policeEnabled) return;
     if (this.player.speedPercent > 0.9) this.police.provoke(dt * 5);
     const { level, changed } = this.police.update(dt, this.player.speedPercent);
     if (changed && level > 0) this.bus.emit('cop:spotted', { level });

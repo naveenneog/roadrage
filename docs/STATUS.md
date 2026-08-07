@@ -1,9 +1,9 @@
 # Status
 
-## Active packet
+**Active packet:** P-18 — rider damage feedback: the bike visibly degrades as
+damage climbs (bent bars, smoke, a dragging pipe).
 
-**P-17 Mobile** — complete. The project is between milestones; the next packet is
-**P-18 Rider damage feedback** from `docs/ROADMAP.md`.
+P-17 Mobile is complete and the project sits at a milestone boundary.
 
 ## Acceptance criteria for P-17 (met)
 

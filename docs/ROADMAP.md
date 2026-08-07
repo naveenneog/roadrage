@@ -41,11 +41,9 @@ Packets are one behaviour each, testable in isolation, shippable in one commit.
 
 ## Milestone 5 — Next
 
-| Packet | Acceptance | State |
-|---|---|---|
-| P-18 Rider damage feedback | The bike visibly degrades as damage climbs — bent bars, smoke, a dragging pipe | open |
-| P-19 Weapon pickups on track | Weapons spawn roadside rather than only dropping from downed riders | open |
-| P-20 Ghost replay | Record and race your own best lap; needs a deterministic input log | open |
-| P-21 Split screen | Two players, one keyboard. The simulation already supports N racers | open |
+- [ ] **P-18** Rider damage feedback — the bike visibly degrades as damage climbs: bent bars, smoke from the engine, a dragging exhaust. Acceptance: at 80% damage the machine is recognisably wounded without reading the HUD.
+- [ ] **P-19** Weapon pickups on track — weapons spawn roadside rather than only dropping from downed riders. Acceptance: a chain can be collected without hitting anybody first.
+- [ ] **P-20** Ghost replay — record and race your own best lap. Acceptance: a deterministic input log replays to the same finishing time twice.
+- [ ] **P-21** Split screen — two players, one keyboard. Acceptance: the simulation already supports N racers; two viewports render at 60 fps combined.
 
 Reviewed at every milestone boundary against what actually shipped.

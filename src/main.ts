@@ -449,18 +449,13 @@ class Game {
     this.persist();
   }
 
-  /** Exposed for the QA harness so a headless run can drive the game. */
+  /** Exposed for the QA harness so a headless run can drive the game. Not a public API. */
   debugState(): Record<string, unknown> {
     return {
-      mode: this.mode,
-      screen: this.screens.visible,
-      fps: this.loop.stats.fps,
-      circuit: this.circuit?.id ?? null,
-      phase: this.race?.phase ?? null,
-      speed: this.race?.player.speed ?? 0,
-      place: this.race?.player.place ?? 0,
-      sprites: this.renderer.atlas.size,
-      cash: this.save.cash,
+      mode: this.mode, screen: this.screens.visible, fps: this.loop.stats.fps,
+      circuit: this.circuit?.id ?? null, phase: this.race?.phase ?? null,
+      speed: this.race?.player.speed ?? 0, place: this.race?.player.place ?? 0,
+      sprites: this.renderer.atlas.size, cash: this.save.cash,
     };
   }
 

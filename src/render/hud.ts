@@ -286,7 +286,9 @@ export class Hud {
     ctx.textAlign = 'center';
     this.toasts.forEach((toast, i) => {
       const alpha = clamp(toast.life / 0.6, 0, 1);
-      const y = height * 0.30 + i * unit * 4;
+      // Sits below the police indicator so a "POLICE" toast and the persistent
+      // police readout never stack on top of each other.
+      const y = height * 0.34 + i * unit * 4;
       ctx.font = `700 ${unit * 3.2}px ${FONT}`;
       ctx.fillStyle = withAlpha(
         toast.tone === 'good' ? GOOD : toast.tone === 'bad' ? BAD : '#f2f4f7',
