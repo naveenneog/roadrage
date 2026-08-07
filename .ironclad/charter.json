@@ -1,0 +1,129 @@
+{
+  "_readme": "The machine-checkable half of this project's contract. Enforced by .ironclad/gate.mjs. Loosening anything here requires an ADR stating why (anti-drift M1).",
+  "version": 1,
+  "name": "Road Rash Bharat",
+  "strictness": "standard",
+  "commands": {
+    "test": "npm run test",
+    "lint": null,
+    "typecheck": "npm run typecheck",
+    "build": "npm run build",
+    "a11y": null,
+    "coverage": "npm run coverage"
+  },
+  "quality": {
+    "maxFileLines": 480,
+    "maxTestFileLines": 800,
+    "maxDebtMarkers": 8,
+    "coverageFloor": null,
+    "minTestRatio": 0.15,
+    "fileSizeExceptions": [
+      {
+        "path": "src/data/**",
+        "maxLines": 900,
+        "why": "Circuit and bike tables are declarative content, not logic. Splitting one circuit's authored segment script across files would make the level harder to read and edit, which is the opposite of what the budget protects."
+      },
+      {
+        "path": "src/render/sprites/**",
+        "maxLines": 900,
+        "why": "Procedural sprite painters are long linear sequences of canvas draw calls with no branching. Their complexity is flat, and cutting them up hides the shape of the artwork being drawn."
+      },
+      {
+        "path": "src/ui/**",
+        "maxLines": 700,
+        "why": "Screen markup builders are long linear DOM construction with no branching; splitting them scatters one screen across several files."
+      }
+    ]
+  },
+  "ledger": {
+    "requireRoadmap": true,
+    "requireStatus": true,
+    "requireChangelog": true,
+    "requireAdr": true,
+    "maxUncommittedFiles": 60,
+    "maxUncommittedLines": 4000,
+    "maxCommitsWithoutAdr": 40,
+    "architectureSignificantPaths": [
+      "src/core/**",
+      "src/game/**",
+      "vite.config.ts"
+    ]
+  },
+  "architecture": {
+    "boundaries": [
+      {
+        "from": "src/core/**",
+        "forbid": [
+          "(^|/)game/",
+          "(^|/)render/",
+          "(^|/)audio/",
+          "(^|/)ui/",
+          "(^|/)data/",
+          "(^|/)track/"
+        ],
+        "why": "core is the dependency-free foundation (math, projection, loop, input, storage). Anything it imports becomes load-bearing for every layer above it."
+      },
+      {
+        "from": "src/track/**",
+        "forbid": [
+          "(^|/)game/",
+          "(^|/)render/",
+          "(^|/)audio/",
+          "(^|/)ui/",
+          "(^|/)data/"
+        ],
+        "why": "Track geometry is pure data that both the simulation and the renderer read. It may only depend on core, which keeps it buildable and assertable in a test with no canvas."
+      },
+      {
+        "from": "src/data/**",
+        "forbid": [
+          "(^|/)game/",
+          "(^|/)render/",
+          "(^|/)audio/",
+          "(^|/)ui/"
+        ],
+        "why": "data is declarative content. It must stay readable and diffable without pulling in behaviour."
+      },
+      {
+        "from": "src/game/**",
+        "forbid": [
+          "(^|/)render/",
+          "(^|/)ui/",
+          "(^|/)audio/"
+        ],
+        "why": "The simulation must be headless so it can be unit-tested without a canvas or an AudioContext. Game logic emits events; the presentation layers subscribe."
+      },
+      {
+        "from": "src/audio/**",
+        "forbid": [
+          "(^|/)game/",
+          "(^|/)render/",
+          "(^|/)ui/"
+        ],
+        "why": "Audio is driven by events and plain parameter objects, never by reaching into game state."
+      },
+      {
+        "from": "src/render/**",
+        "forbid": [
+          "(^|/)audio/",
+          "(^|/)ui/"
+        ],
+        "why": "The renderer reads simulation state and draws it. It must not trigger sound or own UI structure."
+      }
+    ]
+  },
+  "security": {
+    "secretAllowlist": [],
+    "auditDependencies": true
+  },
+  "tests": {
+    "skipAllowlist": []
+  },
+  "ignoreFindings": [],
+  "ignore": [
+    "dist/**",
+    "qa/**",
+    "dev-dist/**"
+  ],
+  "commandTimeoutMs": 900000
+}

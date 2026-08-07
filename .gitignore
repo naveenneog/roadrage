@@ -1,0 +1,24 @@
+# Ironclad: secrets never enter git
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# QA artifacts
+qa/
+coverage/
+test-results/
+playwright-report/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
