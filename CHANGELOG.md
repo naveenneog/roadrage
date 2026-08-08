@@ -2,6 +2,63 @@
 
 All notable changes to Road Rash Bharat. Newest first.
 
+## 0.2.0 — richer world, oncoming traffic, gameplay footage
+
+Driven by studying the original: Louis Gorenfeld's Road Rash analysis (the
+author of the pseudo-3D technique this engine uses) and contemporary accounts of
+the Genesis and 3DO versions.
+
+### Added
+
+- **Oncoming traffic.** The defining hazard of the genre, and it was missing.
+  The right lane holds slow traffic going your way; the left lane now holds
+  something coming at you, closing at the *sum* of both speeds. Head-ons put you
+  down at a far lower threshold, front-view sprites with headlights replace the
+  rear views, and both the rival AI and the test bots weight oncoming traffic as
+  nearer than it is. Per-circuit share, from 12% on a divided arterial to 32% on
+  an undivided ghat.
+- **The nearest rider is named**, with a condition bar and their weapon if they
+  are carrying — straight from the original, where knowing it is Kaale Khan with
+  a chain is what decides whether you fight or leave it.
+- **Cows are traffic, not scenery.** They stood in the road as decoration you
+  drove straight through. Now they are slow, heavy, collidable obstacles.
+- **Roadside structure.** The verge was one flat colour from kerb to horizon.
+  There are now five bands — tarmac, rumble, kerb, shoulder, mid-ground, far
+  ground — each alternating tone per segment, plus scattered shoulder detail,
+  double lane markings and solid edge lines.
+- **Denser, layered scenery.** Props are placed in depth ranks rather than a
+  single flat row, at roughly three times the previous density.
+- **Adaptive resolution.** The renderer is fill-rate bound, so the frame rate
+  governor gives pixels back when it sags and takes them again when it recovers.
+- **Gameplay recording** (`npm run record`). Playwright caps at 25 fps, so the
+  game runs at half speed and ffmpeg speeds the result back up for a true 50 fps
+  clip. Includes a rider bot that holds a racing line and dodges traffic.
+- **Frame budget harness** (`scripts/perf.mjs`) reporting sim versus draw time.
+
+### Changed
+
+- **Bikes and riders redrawn.** Two-tone tank with a lit top and shaded flank,
+  cylinder head, rear shock, mudguard, tail unit; wheels with tread, brake disc
+  and a rotation smear. Riders got jointed arms with elbows and gloves, weight
+  that shifts across the seat with the lean, a counter-leaning torso, boots on
+  the pegs and a helmet with a rim light and chin bar.
+- **Every sprite gets a key light and a dark halo**, so a dark bike no longer
+  disappears into dark tarmac.
+- **Atmosphere is a gradient, not transparency.** Distance used to fade props to
+  transparent, so you could see the sky through a building. Far things now wash
+  toward the colour of the air instead.
+- Screen shake follows a trauma model (offset ∝ magnitude²) per the `game-feel`
+  skill, so routine scrapes barely register and real impacts punch.
+- The wreck sprite reads as a bike on its side with sparks, not a pile of wheels.
+
+### Fixed
+
+- Draw time at 1080p went from 13.7 ms to 2.2 ms (40 → 59 fps) via level-of-
+  detail on the roadside bands, skipping the fog pass on near segments, and the
+  resolution governor.
+- The police readout and the toast both said "POLICE" over each other.
+- Touch controls appeared for the first four seconds on desktop.
+
 ## 0.1.0 — first playable
 
 ### Added

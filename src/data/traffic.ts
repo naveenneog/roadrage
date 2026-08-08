@@ -87,6 +87,15 @@ export const TRAFFIC: readonly TrafficSpec[] = [
     palette: ['#8a6a3a', '#c9b48a', '#3a2f24'],
     note: 'Five to ten km/h. Painted horns, bell collar, and right of way by tradition.',
   },
+  {
+    id: 'cow',
+    name: 'Cow',
+    minKmh: 3, maxKmh: 7,
+    width: 0.30, mass: 0.75,
+    weaves: 0.5,
+    palette: ['#d8cfc0', '#e8542a', '#2a2118'],
+    note: 'Stands in the road, unimpressed by horns, and cannot be hit without consequence.',
+  },
 ];
 
 const BY_ID = new Map(TRAFFIC.map((t) => [t.id, t]));

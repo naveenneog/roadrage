@@ -216,9 +216,11 @@ export class Hud {
   }
 
   /**
-   * Top-centre strip showing who is near you on the road.
-   * Far more useful than a track map at these speeds — what you need to know is
-   * whether the person about to kick you is on your left or your right.
+   * Top-centre strip showing who is near you on the road, and who they are.
+   *
+   * Naming the closest rider is straight out of the original: it turns "a bike"
+   * into "Kaale Khan, who has a chain", which is the whole reason you decide to
+   * fight or to leave it.
    */
   private drawMinimap(
     ctx: CanvasRenderingContext2D,
@@ -238,13 +240,21 @@ export class Hud {
     ctx.fillStyle = withAlpha('#ffffff', 0.14);
     ctx.fillRect(x + w / 2 - 1, y, 2, h);
 
+    let nearest: Racer | null = null;
+    let nearestGap = Infinity;
+
     for (const racer of race.racers) {
-      if (racer === race.player) continue;
+      if (racer === race.player || racer.finished) continue;
       let dz = racer.z - race.player.z;
       const len = race.road.length;
       if (dz > len / 2) dz -= len;
       if (dz < -len / 2) dz += len;
       if (Math.abs(dz) > range) continue;
+
+      if (Math.abs(dz) < nearestGap) {
+        nearestGap = Math.abs(dz);
+        nearest = racer;
+      }
 
       const px = x + w / 2 + (dz / range) * (w / 2);
       const py = y + h / 2 + clamp(racer.x, -1.4, 1.4) * (h / 2.8);
@@ -255,6 +265,28 @@ export class Hud {
     const py = y + h / 2 + clamp(race.player.x, -1.4, 1.4) * (h / 2.8);
     ctx.fillStyle = GOOD;
     ctx.fillRect(x + w / 2 - unit * 0.45, py - unit * 0.45, unit * 0.9, unit * 0.9);
+
+    // The closest rider's name and condition, under the strip.
+    if (nearest && nearestGap < 2600) {
+      ctx.textAlign = 'center';
+      ctx.font = `700 ${unit * 1.7}px ${FONT}`;
+      ctx.fillStyle = withAlpha('#f2f4f7', 0.92);
+      const label = nearest.weapon
+        ? `${nearest.name}  ·  ${nearest.weapon.toUpperCase()}`
+        : nearest.name;
+      ctx.fillText(label.toUpperCase(), width / 2, y + h + unit * 2.1);
+
+      // A short condition bar, so you can tell who is nearly finished.
+      const bw = unit * 10;
+      const bh = unit * 0.6;
+      const bx = width / 2 - bw / 2;
+      const by = y + h + unit * 2.9;
+      ctx.fillStyle = withAlpha(INK, 0.55);
+      ctx.fillRect(bx, by, bw, bh);
+      const health = clamp(nearest.riderHealth / 100, 0, 1);
+      ctx.fillStyle = health > 0.5 ? BAD : WARN;
+      ctx.fillRect(bx, by, bw * health, bh);
+    }
     void height;
   }
 
@@ -270,10 +302,11 @@ export class Hud {
     ctx.textAlign = 'center';
     ctx.font = `700 ${unit * 2}px ${FONT}`;
     ctx.fillStyle = flash ? '#5aa8e8' : BAD;
-    ctx.fillText('POLICE', width / 2, unit * 9);
+    // Sits below the rival nameplate so the two never collide.
+    ctx.fillText('POLICE', width / 2, unit * 12.4);
     for (let i = 0; i < level; i++) {
       ctx.fillStyle = flash ? BAD : '#5aa8e8';
-      ctx.fillRect(width / 2 - unit * 3 + i * unit * 2.4, unit * 10.2, unit * 1.8, unit * 0.8);
+      ctx.fillRect(width / 2 - unit * 3 + i * unit * 2.4, unit * 13.6, unit * 1.8, unit * 0.8);
     }
   }
 
@@ -288,7 +321,7 @@ export class Hud {
       const alpha = clamp(toast.life / 0.6, 0, 1);
       // Sits below the police indicator so a "POLICE" toast and the persistent
       // police readout never stack on top of each other.
-      const y = height * 0.34 + i * unit * 4;
+      const y = height * 0.40 + i * unit * 4;
       ctx.font = `700 ${unit * 3.2}px ${FONT}`;
       ctx.fillStyle = withAlpha(
         toast.tone === 'good' ? GOOD : toast.tone === 'bad' ? BAD : '#f2f4f7',

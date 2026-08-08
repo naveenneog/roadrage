@@ -191,4 +191,46 @@ export class Painter {
     this.ctx.globalAlpha = value;
     return this;
   }
+
+  /**
+   * Lay a light gradient over only the pixels already drawn.
+   *
+   * `source-atop` clips to the existing artwork, so this acts as a cheap
+   * top-down key light on the sprite's own silhouette — the single most
+   * effective thing for making a flat-shaded sprite read as a solid object
+   * against a similarly-toned background.
+   */
+  keyLight(strength = 0.18, warm = '#ffffff', cool = '#000010'): this {
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const grad = ctx.createLinearGradient(0, 0, 0, this.h);
+    grad.addColorStop(0, `rgba(255,255,255,${strength})`);
+    grad.addColorStop(0.42, 'rgba(255,255,255,0)');
+    grad.addColorStop(1, `rgba(0,0,16,${strength * 1.4})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, this.w, this.h);
+    ctx.restore();
+    void warm;
+    void cool;
+    return this;
+  }
+
+  /**
+   * Draw a dark halo behind everything already on the canvas.
+   *
+   * `destination-over` paints underneath, so a blurred copy of the silhouette
+   * becomes a soft outline that separates the sprite from the road without
+   * touching the artwork itself.
+   */
+  haloBehind(canvas: HTMLCanvasElement, blur = 6, alpha = 0.45): this {
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.globalAlpha = alpha;
+    ctx.filter = `blur(${blur}px) brightness(0)`;
+    ctx.drawImage(canvas, 0, 0, this.w, this.h);
+    ctx.restore();
+    return this;
+  }
 }

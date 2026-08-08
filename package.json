@@ -1,7 +1,7 @@
 {
   "name": "road-rash-bharat",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Street bike combat racing through Indian cities. A pseudo-3D arcade racer in the Road Rash tradition.",
   "type": "module",
   "scripts": {
@@ -16,7 +16,10 @@
     "qa": "node scripts/qa.mjs",
     "icons": "node scripts/icons.mjs",
     "qa:campaign": "node scripts/qa-campaign.mjs",
-    "balance": "vite-node scripts/balance.ts"
+    "balance": "vite-node scripts/balance.ts",
+    "record": "node scripts/record.mjs",
+    "perf": "node scripts/perf.mjs",
+    "qa:circuits": "node scripts/qa-circuits.mjs"
   },
   "keywords": [
     "game",

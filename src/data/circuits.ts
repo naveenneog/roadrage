@@ -26,25 +26,56 @@ const SKY: Record<string, SkyPalette> = {
   },
 };
 
+/**
+ * Road surfaces are built in bands running out from the centre line: tarmac,
+ * rumble, kerb, shoulder, then the far ground. Each band alternates between two
+ * tones every few segments, which is what makes the road appear to rush past —
+ * a single flat colour reads as a still image however fast you are going.
+ */
 const TARMAC: SurfacePalette = {
   road: ['#3b3d42', '#37393e'], rumble: ['#c8c9cc', '#a03a34'],
-  lane: '#e6e7ea', grass: ['#7d6b46', '#736240'], fog: '#c9d4dc',
+  lane: '#e6e7ea',
+  kerb: ['#9a9186', '#8d857a'],
+  shoulder: ['#7d6b46', '#75633f'],
+  grass: ['#6b7a42', '#63723c'],
+  detail: ['#5f5136', '#8a7856'],
+  fog: '#c9d4dc',
 };
 const CITY_TARMAC: SurfacePalette = {
   road: ['#35373c', '#313338'], rumble: ['#d5d6d9', '#7d3b38'],
-  lane: '#dcdde0', grass: ['#8a7c62', '#7e7158'], fog: '#cbd2d8',
+  lane: '#dcdde0',
+  kerb: ['#b3aa9c', '#a49b8e'],
+  shoulder: ['#8e8676', '#847c6d'],
+  grass: ['#6e6a58', '#666252'],
+  detail: ['#6a6252', '#a29883'],
+  fog: '#cbd2d8',
 };
 const NIGHT_TARMAC: SurfacePalette = {
   road: ['#212429', '#1d2025'], rumble: ['#8b8f96', '#6d2f2c'],
-  lane: '#a8adb5', grass: ['#3c362a', '#353024'], fog: '#1a2334',
+  lane: '#a8adb5',
+  kerb: ['#5a5750', '#514e48'],
+  shoulder: ['#453f36', '#3d3830'],
+  grass: ['#31302a', '#2b2a25'],
+  detail: ['#2c2a24', '#565046'],
+  fog: '#1a2334',
 };
 const WET_TARMAC: SurfacePalette = {
   road: ['#2f3338', '#2b2f34'], rumble: ['#b6bac0', '#8a3a35'],
-  lane: '#c8ccd2', grass: ['#4e6032', '#46572c'], fog: '#95a3ae',
+  lane: '#c8ccd2',
+  kerb: ['#7e7a72', '#736f68'],
+  shoulder: ['#5a5140', '#524a3a'],
+  grass: ['#4e6032', '#46572c'],
+  detail: ['#3f4a2c', '#6d6a52'],
+  fog: '#95a3ae',
 };
 const COAST_TARMAC: SurfacePalette = {
   road: ['#3e4045', '#3a3c41'], rumble: ['#e2e3e5', '#b8544a'],
-  lane: '#f0f1f3', grass: ['#94854f', '#8a7b48'], fog: '#e2d9c4',
+  lane: '#f0f1f3',
+  kerb: ['#c2b89e', '#b4aa92'],
+  shoulder: ['#a89968', '#9c8e5f'],
+  grass: ['#7d8a4a', '#748143'],
+  detail: ['#8a7c50', '#c4b78e'],
+  fog: '#e2d9c4',
 };
 
 /* ─────────────────────────── scenery mixes ─────────────────────────── */
@@ -64,7 +95,7 @@ const BENGALURU_MARKET: Mix = [
   { id: 'bus-shelter', weight: 5, minOffset: 1.1, maxOffset: 1.3 },
   { id: 'streetlight', weight: 12, minOffset: 1.05, maxOffset: 1.15 },
   { id: 'nullah', weight: 6, minOffset: 1.02, maxOffset: 1.08 },
-  { id: 'cow', weight: 3, minOffset: 0.9, maxOffset: 1.25, scale: 0.85 },
+  { id: 'cow', weight: 3, minOffset: 1.05, maxOffset: 1.4, scale: 0.85 },
   { id: 'dog', weight: 4, minOffset: 1.05, maxOffset: 1.4, scale: 0.6 },
   { id: 'barricade', weight: 4, minOffset: 1.02, maxOffset: 1.2 },
 ];
@@ -120,7 +151,7 @@ const GOA_COAST: Mix = [
   { id: 'church', weight: 5, minOffset: 1.4, maxOffset: 1.9, scale: 1.3 },
   { id: 'milestone', weight: 8, minOffset: 1.04, maxOffset: 1.14, scale: 0.7 },
   { id: 'dhaba', weight: 7, minOffset: 1.2, maxOffset: 1.6 },
-  { id: 'cow', weight: 5, minOffset: 0.95, maxOffset: 1.3, scale: 0.85 },
+  { id: 'cow', weight: 5, minOffset: 1.05, maxOffset: 1.4, scale: 0.85 },
   { id: 'neem', weight: 9, minOffset: 1.2, maxOffset: 1.8 },
 ];
 
@@ -141,22 +172,24 @@ const CITY_TRAFFIC = [
   { id: 'auto', weight: 24 }, { id: 'splendor-family', weight: 18 },
   { id: 'tempo', weight: 14 }, { id: 'bus', weight: 10 },
   { id: 'maruti800', weight: 14 }, { id: 'cycle-rickshaw', weight: 8 },
-  { id: 'activa', weight: 12 },
+  { id: 'activa', weight: 12 }, { id: 'cow', weight: 5 },
 ];
 const HIGHWAY_TRAFFIC = [
   { id: 'truck', weight: 26 }, { id: 'tempo', weight: 18 },
   { id: 'bus', weight: 14 }, { id: 'maruti800', weight: 16 },
   { id: 'auto', weight: 12 }, { id: 'splendor-family', weight: 14 },
+  { id: 'cow', weight: 4 },
 ];
 const GHAT_TRAFFIC = [
   { id: 'truck', weight: 34 }, { id: 'bus', weight: 20 },
   { id: 'tempo', weight: 16 }, { id: 'maruti800', weight: 14 },
   { id: 'bullock-cart', weight: 8 }, { id: 'splendor-family', weight: 8 },
+  { id: 'cow', weight: 6 },
 ];
 const LANE_TRAFFIC = [
   { id: 'cycle-rickshaw', weight: 30 }, { id: 'auto', weight: 24 },
   { id: 'splendor-family', weight: 20 }, { id: 'bullock-cart', weight: 10 },
-  { id: 'tempo', weight: 10 },
+  { id: 'tempo', weight: 10 }, { id: 'cow', weight: 8 },
 ];
 
 /* ─────────────────────────── the circuits ─────────────────────────── */
@@ -176,6 +209,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.62,
     traffic: CITY_TRAFFIC,
     trafficDensity: 0.55,
+    oncomingShare: 0.28,
     fogDensity: 6,
     purse: 18000,
     entryFee: 0,
@@ -223,6 +257,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.5,
     traffic: CITY_TRAFFIC,
     trafficDensity: 0.45,
+    oncomingShare: 0.22,
     fogDensity: 4,
     purse: 24000,
     entryFee: 2000,
@@ -263,6 +298,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.55,
     traffic: CITY_TRAFFIC,
     trafficDensity: 0.3,
+    oncomingShare: 0.18,
     fogDensity: 3,
     purse: 40000,
     entryFee: 6000,
@@ -302,6 +338,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.45,
     traffic: HIGHWAY_TRAFFIC,
     trafficDensity: 0.58,
+    oncomingShare: 0.12,
     fogDensity: 5,
     purse: 62000,
     entryFee: 10000,
@@ -343,6 +380,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.6,
     traffic: CITY_TRAFFIC,
     trafficDensity: 0.4,
+    oncomingShare: 0.15,
     fogDensity: 3,
     purse: 88000,
     entryFee: 15000,
@@ -383,6 +421,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.75,
     traffic: GHAT_TRAFFIC,
     trafficDensity: 0.35,
+    oncomingShare: 0.32,
     fogDensity: 14,
     purse: 120000,
     entryFee: 22000,
@@ -425,6 +464,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.8,
     traffic: GHAT_TRAFFIC,
     trafficDensity: 0.5,
+    oncomingShare: 0.3,
     fogDensity: 22,
     purse: 210000,
     entryFee: 40000,
@@ -468,6 +508,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.58,
     traffic: HIGHWAY_TRAFFIC,
     trafficDensity: 0.32,
+    oncomingShare: 0.3,
     fogDensity: 4,
     purse: 74000,
     entryFee: 12000,
@@ -506,6 +547,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     sceneryDensity: 0.9,
     traffic: LANE_TRAFFIC,
     trafficDensity: 0.85,
+    oncomingShare: 0.25,
     fogDensity: 9,
     purse: 165000,
     entryFee: 30000,

@@ -10,18 +10,20 @@ import type { CircuitSpec } from './data/types.ts';
 import { Race } from './game/race.ts';
 import { tierForDifficulty } from './game/ai.ts';
 import { engineBroadcast, musicIntensity } from './game/broadcast.ts';
-import {
-  applyCampaignResult, applyRaceResult, canEnter, nextEvent, payEntry, purchase, selectBike,
-} from './game/career.ts';
+import { canEnter, nextEvent, payEntry, purchase, selectBike } from './game/career.ts';
 import type { Controls } from './game/physics.ts';
 import { Hud } from './render/hud.ts';
 import { Renderer } from './render/renderer.ts';
 import { warmForRace } from './render/warmup.ts';
 import { getTraffic } from './data/traffic.ts';
 import { attachPresentation } from './ui/presenter.ts';
-import { fitCanvas, resolveQuality, type QualityLevel } from './ui/viewport.ts';
+import { buildDebugSnapshot, type DebugSnapshot } from './ui/debug.ts';
+import { buildFinish } from './ui/results.ts';
 import {
-  CAMPAIGN_CHAPTERS, Screens, type CampaignChapter, type ResultsPayload, type ScreenId,
+  bindShellEvents, fitCanvas, resolveQuality, ResolutionGovernor, type QualityLevel,
+} from './ui/viewport.ts';
+import {
+  CAMPAIGN_CHAPTERS, Screens, type CampaignChapter, type ScreenId,
 } from './ui/screens.ts';
 
 type Mode = 'menu' | 'racing' | 'paused' | 'results';
@@ -60,8 +62,13 @@ class Game {
   private lastSnapshot: InputSnapshot | null = null;
   private takedowns = 0;
   private topSpeed = 0;
-  private audioUnlocked = false;
   private storyBeatsFired = new Set<string>();
+  /** Capture-only: slows the simulation without slowing the render loop. */
+  private timeScale = 1;
+  /** Capture-only: keeps the player upright so footage never ends on a wreck. */
+  private invincible = false;
+  /** Adaptive resolution, driven by the measured frame rate. */
+  private readonly governor = new ResolutionGovernor();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -106,28 +113,21 @@ class Game {
   /* ─────────────────────────── setup ─────────────────────────── */
 
   private bindGlobalEvents(): void {
-    window.addEventListener('resize', () => this.resize());
-    window.addEventListener('orientationchange', () => window.setTimeout(() => this.resize(), 120));
-
-    // The first gesture anywhere unlocks audio, which browsers require.
-    const unlock = async () => {
-      if (this.audioUnlocked) return;
-      this.audioUnlocked = true;
-      await this.audio.unlock();
-      this.applyVolumes();
-      this.audio.playMusic('menu');
-    };
-    for (const type of ['pointerdown', 'keydown'] as const) {
-      window.addEventListener(type, unlock, { once: true });
-    }
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.mode === 'racing') this.pause();
+    bindShellEvents({
+      onResize: () => this.resize(),
+      onFirstGesture: async () => {
+        await this.audio.unlock();
+        this.applyVolumes();
+        this.audio.playMusic('menu');
+      },
+      onHidden: () => {
+        if (this.mode === 'racing') this.pause();
+      },
     });
   }
 
   private resize(): void {
-    const size = fitCanvas(this.canvas, this.qualityLevel);
+    const size = fitCanvas(this.canvas, this.qualityLevel, this.governor.value);
     this.renderer.resize(size.pixelWidth, size.pixelHeight);
     if (this.circuit && this.race) this.renderer.prepare(this.circuit, this.race.road);
     if (rotateHint) rotateHint.hidden = !size.needsRotation;
@@ -263,7 +263,11 @@ class Game {
       boost: snapshot.pressed.nitro,
     };
 
-    race.update(dt, controls);
+    race.update(dt * this.timeScale, controls);
+    if (this.invincible) {
+      race.player.bikeDamage = Math.min(race.player.bikeDamage, 60);
+      race.player.riderHealth = Math.max(race.player.riderHealth, 40);
+    }
 
     if (snapshot.pressed.horn) {
       race.bus.emit('horn', { pan: 0, kind: race.player.bike.threeWheeler ? 'auto' : 'bike' });
@@ -272,6 +276,7 @@ class Game {
     this.topSpeed = Math.max(this.topSpeed, race.player.speed);
     this.fireStoryBeats(race);
     this.updateAudio(race, dt);
+    if (this.governor.update(dt, this.loop.stats.fps)) this.resize();
   }
 
   private fireStoryBeats(race: Race): void {
@@ -372,54 +377,21 @@ class Game {
     this.mode = 'results';
 
     const wrecked = race.phase === 'wrecked';
-    const won = payload.position === 1 && !wrecked;
-
-    // All progression maths lives in `game/career.ts` so it can be tested
-    // without a canvas, an AudioContext or a nine-race playthrough.
-    const change = chapter
-      ? applyCampaignResult(
-          this.save,
-          {
-            chapterIndex: CAMPAIGN_CHAPTERS.indexOf(chapter),
-            survived: !wrecked,
-            reward: chapter.reward,
-          },
-          CAMPAIGN_CHAPTERS.length,
-          (i) => CAMPAIGN_CHAPTERS[i]?.title ?? '',
-        )
-      : applyRaceResult(
-          this.save,
-          {
-            circuitId: circuit.id,
-            position: payload.position,
-            timeSeconds: payload.timeSeconds,
-            wrecked,
-            takedowns: this.takedowns,
-            prize: payload.cash,
-          },
-          CAREER_ORDER,
-          (id) => getCircuit(id).name,
-        );
-
-    this.save = change.save;
-    this.persist();
-
-    const results: ResultsPayload = {
-      circuitName: circuit.name,
-      position: payload.position,
+    const { change, results } = buildFinish(this.save, payload, {
+      circuit,
+      chapter,
+      wrecked,
       fieldSize: race.racers.length,
-      timeSeconds: payload.timeSeconds,
-      cash: change.cash,
       takedowns: this.takedowns,
       damage: race.player.bikeDamage,
       topSpeed: this.topSpeed,
-      wrecked,
-      best: change.personalBest,
-      unlocked: change.unlocked,
-      canContinue: !chapter && nextEvent(this.save, circuit.id, CAREER_ORDER) !== null,
-    };
+      careerOrder: CAREER_ORDER,
+      nameOf: (id) => getCircuit(id).name,
+    });
 
-    this.audio.playMusic(won ? 'victory' : 'menu');
+    this.save = change.save;
+    this.persist();
+    this.audio.playMusic(payload.position === 1 && !wrecked ? 'victory' : 'menu');
     this.screens.show('results', results);
   }
 
@@ -450,14 +422,28 @@ class Game {
     this.persist();
   }
 
-  /** Exposed for the QA harness so a headless run can drive the game. Not a public API. */
-  debugState(): Record<string, unknown> {
-    return {
-      mode: this.mode, screen: this.screens.visible, fps: this.loop.stats.fps,
-      circuit: this.circuit?.id ?? null, phase: this.race?.phase ?? null,
-      speed: this.race?.player.speed ?? 0, place: this.race?.player.place ?? 0,
-      sprites: this.renderer.atlas.size, cash: this.save.cash,
-    };
+  /** Exposed for the automation harnesses. Not a public API. */
+  debugState(): DebugSnapshot {
+    return buildDebugSnapshot(
+      this.mode, this.screens.visible, this.loop, this.renderer.atlas,
+      this.save.cash, this.circuit?.id ?? null, this.race,
+    );
+  }
+
+  /**
+   * Slow the whole simulation for video capture.
+   *
+   * Playwright records at a hard 25 fps, so smooth footage is produced by
+   * running the game at half speed, recording for twice as long, and speeding
+   * the result back up — which yields an effective 50 fps.
+   */
+  setTimeScale(scale: number): void {
+    this.timeScale = Math.max(0.05, Math.min(4, scale));
+  }
+
+  /** Make the player immortal, so a capture run can never end on a wreck. */
+  setInvincible(on: boolean): void {
+    this.invincible = on;
   }
 
   resetSave(): void {
@@ -473,6 +459,8 @@ const game = new Game(canvas, ctx, uiRoot);
 (window as unknown as { __game: unknown }).__game = {
   state: () => game.debugState(),
   reset: () => game.resetSave(),
+  timeScale: (v: number) => game.setTimeScale(v),
+  invincible: (v: boolean) => game.setInvincible(v),
 };
 
 export type { ScreenId };

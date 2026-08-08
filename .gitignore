@@ -24,3 +24,11 @@ playwright-report/
 Thumbs.db
 .vscode/
 .idea/
+
+# Recorded footage (large binaries; regenerate with npm run record)
+media/*.mp4
+media/*.webm
+media/*.gif
+qa2/
+qa3/
+qa-circuits/

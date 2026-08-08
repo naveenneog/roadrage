@@ -305,17 +305,21 @@ describe('a whole race, simulated headlessly', () => {
       const dz = vehicle.z - race.player.z;
       const wrapped = dz < -race.road.length / 2 ? dz + race.road.length : dz;
       if (wrapped < 0 || wrapped > 9000) continue;
-      if (!nearest || wrapped < nearest.dz) {
-        nearest = { dz: wrapped, x: vehicle.x, width: vehicle.spec.width };
+      // Oncoming traffic closes at the sum of both speeds, so treat it as much
+      // nearer than the raw gap suggests — exactly as the rival AI does.
+      const urgency = vehicle.oncoming ? wrapped * 0.5 : wrapped;
+      if (!nearest || urgency < nearest.dz) {
+        nearest = { dz: urgency, x: vehicle.x, width: vehicle.spec.width };
       }
     }
-    if (nearest && Math.abs(nearest.x - race.player.x) < nearest.width + 0.3) {
+    if (nearest && Math.abs(nearest.x - race.player.x) < nearest.width + 0.35) {
       // Go around whichever side has more road.
       const away = nearest.x > 0 ? -1 : 1;
-      const target = clampTo(nearest.x + away * (nearest.width + 0.45), -0.9, 0.9);
+      const target = clampTo(nearest.x + away * (nearest.width + 0.5), -0.9, 0.9);
       return clampTo((target - race.player.x) * 3, -1, 1);
     }
-    return clampTo(-race.player.x * 2.5, -1, 1);
+    // Default to the left of centre: the opposing lane is not yours.
+    return clampTo((0.25 - race.player.x) * 2.5, -1, 1);
   };
 
   const clampTo = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));

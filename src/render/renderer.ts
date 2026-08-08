@@ -9,7 +9,7 @@ import { SpriteAtlas } from './atlas.ts';
 import { Background } from './background.ts';
 import { Effects } from './effects.ts';
 import { Painter } from './painter.ts';
-import { mix } from './palette.ts';
+import { mix, withAlpha } from './palette.ts';
 import { paintSegment } from './road-painter.ts';
 import type { BikeFrameOptions } from './sprites/bike.ts';
 import { propWorldWidth } from './sprites/props.ts';
@@ -24,7 +24,7 @@ export interface RenderQuality {
 export const QUALITY: Record<'low' | 'medium' | 'high', RenderQuality> = {
   low: { drawDistance: 110, sceneryDetail: 0.5, particles: false, speedLines: false },
   medium: { drawDistance: 180, sceneryDetail: 0.8, particles: true, speedLines: true },
-  high: { drawDistance: 210, sceneryDetail: 1, particles: true, speedLines: true },
+  high: { drawDistance: 175, sceneryDetail: 1, particles: true, speedLines: true },
 };
 
 /** How far in front of the camera the player's bike sits, in world units. */
@@ -32,9 +32,11 @@ const PLAYER_Z_OFFSET = 900;
 const CAMERA_HEIGHT = 1100;
 const BASE_FOV = 96;
 /** Segments nearer than this (in world units) draw no scenery. */
-const SCENERY_NEAR_Z = 5200;
+const SCENERY_NEAR_Z = 4200;
 /** Scenery fades in across this band so nothing pops into existence. */
-const SCENERY_FADE_Z = 3600;
+const SCENERY_FADE_Z = 1400;
+/** Below this on-screen width a prop is a smudge; skipping it is free frames. */
+const MIN_PROP_PIXELS = 5;
 /** The player's bike as a fraction of screen height; entities are clamped to it. */
 const PLAYER_SPRITE_HEIGHT = 0.42;
 
@@ -129,10 +131,13 @@ export class Renderer {
     const playerWorldY = lerp(playerSegment.p1.world.y, playerSegment.p2.world.y, playerPercent);
     const cameraY = playerWorldY + CAMERA_HEIGHT + player.y * 0.4;
 
-    // Shake decays toward zero; the race owns the magnitude, the renderer the wobble.
-    const shake = race.shake;
-    this.shakeX = (Painter.noise(performance.now() * 0.013) - 0.5) * shake * 26;
-    this.shakeY = (Painter.noise(performance.now() * 0.017 + 9) - 0.5) * shake * 20;
+    // Shake follows a trauma model: the offset is the square of the magnitude,
+    // so routine scrapes barely register while a real impact punches. Sampled
+    // noise rather than a per-frame random, which would buzz like static.
+    const trauma = race.shake * race.shake;
+    const now = performance.now();
+    this.shakeX = (Painter.noise(now * 0.013) - 0.5) * trauma * 34;
+    this.shakeY = (Painter.noise(now * 0.017 + 9) - 0.5) * trauma * 26;
 
     ctx.save();
     ctx.translate(this.shakeX, this.shakeY);
@@ -144,6 +149,7 @@ export class Renderer {
 
     this.drawRoad(ctx, road, baseSegment, basePercent, player, cameraY, position, circuit);
     this.drawEntities(ctx, race, road, baseSegment, player);
+    this.drawHaze(ctx, width, height, horizon, circuit);
     this.drawPlayer(ctx, race, player);
 
     ctx.restore();
@@ -156,7 +162,29 @@ export class Renderer {
     if (showDebug) this.drawDebug(ctx, race);
   }
 
-  /* ───────────────────────────── road ───────────────────────────── */
+  /**
+   * Atmosphere: one gradient from the horizon down over the whole world.
+   *
+   * This is what distance is supposed to look like — everything far away washes
+   * toward the colour of the air, in front of the road and the scenery alike.
+   * Drawn before the player so the bike stays crisp in the foreground.
+   */
+  private drawHaze(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    horizon: number,
+    circuit: CircuitSpec,
+  ): void {
+    const depth = clamp(circuit.fogDensity / 22, 0.12, 0.85);
+    const band = height * 0.5;
+    const grad = ctx.createLinearGradient(0, horizon - band * 0.25, 0, horizon + band);
+    grad.addColorStop(0, withAlpha(this.fogColour, depth));
+    grad.addColorStop(0.35, withAlpha(this.fogColour, depth * 0.5));
+    grad.addColorStop(1, withAlpha(this.fogColour, 0));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, Math.max(0, horizon - band * 0.25), width, band * 1.25);
+  }
 
   private drawRoad(
     ctx: CanvasRenderingContext2D,
@@ -294,10 +322,13 @@ export class Renderer {
     const destX = p.x + offset * p.w - destW / 2;
     const destY = p.y - destH;
 
-    if (destX > this.width || destX + destW < 0 || destW < 1.5) return;
+    if (destX > this.width || destX + destW < 0 || destW < MIN_PROP_PIXELS) return;
     if (destY > segment.clip) return;
 
-    ctx.globalAlpha = segment.fog * nearFade;
+    // Props stay largely opaque. Fading them with distance makes them
+    // *transparent* — you see the sky through a building — where what distance
+    // should do is make them hazy. That is the atmosphere pass's job.
+    ctx.globalAlpha = (0.78 + 0.22 * segment.fog) * nearFade;
     ctx.drawImage(sprite.canvas, destX, destY, destW, destH);
     ctx.globalAlpha = 1;
   }
@@ -338,7 +369,8 @@ export class Renderer {
   ): void {
     const at = this.projectEntity(road, vehicle.z, vehicle.x, 0, player);
     if (!at) return;
-    const sprite = this.atlas.vehicle(vehicle.spec, Math.abs(Math.round(vehicle.phase)) % 3);
+    const sprite = this.atlas.vehicle(
+      vehicle.spec, Math.abs(Math.round(vehicle.phase)) % 3, vehicle.oncoming);
     const destW = Math.min(at.w * vehicle.spec.width * 1.9, this.maxEntityWidth(sprite));
     const destH = (sprite.height / sprite.width) * destW;
     if (destW < 2) return;

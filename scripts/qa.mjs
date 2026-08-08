@@ -86,15 +86,25 @@ for (const viewport of VIEWPORTS) {
     const start = Date.now();
     let steer = null;
     while ((Date.now() - start) / 1000 < playSeconds) {
-      const t = (Date.now() - start) / 1000;
-      const wantSteer = Math.sin(t * 0.8) > 0 ? 'ArrowRight' : 'ArrowLeft';
-      if (steer !== wantSteer) {
-        if (steer) await page.keyboard.up(steer);
-        await page.keyboard.down(wantSteer);
-        steer = wantSteer;
+      // Hold a line and go around anything slow ahead. An off-road or crashed
+      // bot produces screenshots of an empty verge and tells you nothing.
+      const s = await page.evaluate(() => window.__game.state());
+      const x = s.x ?? 0;
+      let target = Math.sin((Date.now() - start) / 1000 * 0.7) * 0.4 + 0.2;
+      if (s.hazardDz >= 0 && s.hazardDz < 7000
+        && Math.abs(s.hazardX - x) < s.hazardWidth + 0.34) {
+        const away = s.hazardX > 0 ? -1 : 1;
+        target = Math.max(-0.9, Math.min(0.9, s.hazardX + away * (s.hazardWidth + 0.5)));
       }
-      if (Math.floor(t * 2) % 5 === 0) await page.keyboard.press('KeyK');
-      await page.waitForTimeout(180);
+      const err = target - x;
+      const want = err > 0.08 ? 'ArrowRight' : err < -0.08 ? 'ArrowLeft' : null;
+      if (want !== steer) {
+        if (steer) await page.keyboard.up(steer);
+        if (want) await page.keyboard.down(want);
+        steer = want;
+      }
+      if (Math.random() < 0.25) await page.keyboard.press('KeyK');
+      await page.waitForTimeout(120);
     }
     if (steer) await page.keyboard.up(steer);
 
@@ -132,7 +142,7 @@ for (const viewport of VIEWPORTS) {
     entry.overflow = overflow.scrollWidth > overflow.clientWidth + 1
       ? `${overflow.scrollWidth} > ${overflow.clientWidth}`
       : null;
-    entry.moved = midState.speed > 0;
+    entry.moved = midState.speed > 0 || midState.lap > 0 || midState.down === true;
     entry.spritesBuilt = midState.sprites;
 
     if (!entry.moved) {

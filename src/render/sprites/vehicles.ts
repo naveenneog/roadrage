@@ -13,7 +13,8 @@ export type VehiclePainter = (p: Painter, spec: TrafficSpec, seed: number) => vo
 /** Height / width, so the atlas can size the sprite correctly. */
 export const VEHICLE_ASPECT: Record<string, number> = {
   'auto': 0.95, 'splendor-family': 1.15, 'activa': 1.05, 'maruti800': 0.78,
-  'tempo': 0.95, 'bus': 1.05, 'truck': 1.05, 'cycle-rickshaw': 1.0, 'bullock-cart': 0.9,
+  'tempo': 0.95, 'bus': 1.05, 'truck': 1.05, 'cycle-rickshaw': 1.0,
+  'bullock-cart': 0.9, 'cow': 1.0,
 };
 
 const wheels = (p: Painter, y: number, r: number, left: number, right: number): void => {
@@ -202,6 +203,117 @@ const bullockCart: VehiclePainter = (p, spec) => {
   p.ellipse(0.62, 0.36, 0.11, 0.09, '#cdc3b2');
 };
 
+const cow: VehiclePainter = (p, spec) => {
+  const [hide, horn, eye] = spec.palette;
+  p.ellipse(0.5, 0.965, 0.34, 0.032, 'rgba(0,0,0,0.3)');
+  // Rear view: rump, tail, and the hind legs planted in your lane.
+  p.ellipse(0.5, 0.62, 0.30, 0.22, hide);
+  p.ellipse(0.5, 0.50, 0.22, 0.12, lighten(hide, 0.08));
+  p.rect(0.30, 0.78, 0.11, 0.20, darken(hide, 0.10));
+  p.rect(0.59, 0.78, 0.11, 0.20, darken(hide, 0.14));
+  p.rect(0.30, 0.94, 0.11, 0.05, '#3a2f24');
+  p.rect(0.59, 0.94, 0.11, 0.05, '#3a2f24');
+  // Tail flicking.
+  p.line(0.50, 0.46, 0.545, 0.74, darken(hide, 0.2), 0.026);
+  p.ellipse(0.548, 0.77, 0.030, 0.038, '#3a2f24');
+  // The hump that makes it a zebu, and painted horns either side of the head.
+  p.ellipse(0.5, 0.42, 0.14, 0.075, lighten(hide, 0.12));
+  p.curve(0.40, 0.40, 0.35, 0.31, 0.41, 0.28, horn, 0.026);
+  p.curve(0.60, 0.40, 0.65, 0.31, 0.59, 0.28, horn, 0.026);
+  p.ellipse(0.44, 0.435, 0.018, 0.014, eye);
+  p.ellipse(0.56, 0.435, 0.018, 0.014, eye);
+};
+
+/**
+ * Front views, for traffic coming the other way.
+ *
+ * Four archetypes rather than one painter per vehicle: at a combined closing
+ * speed of 200 km/h you register a silhouette, a pair of headlights and a
+ * colour, and you register them for about a third of a second.
+ */
+const frontLights = (p: Painter, y: number, spread: number, size: number): void => {
+  for (const side of [-1, 1] as const) {
+    p.ellipse(0.5 + side * spread, y, size * 1.9, size * 1.9, 'rgba(255,228,150,0.30)');
+    p.ellipse(0.5 + side * spread, y, size, size, '#fff2c8');
+    p.ellipse(0.5 + side * spread, y, size * 0.5, size * 0.5, '#ffffff');
+  }
+};
+
+const frontTall: VehiclePainter = (p, spec, seed) => {
+  // Bus or truck: a slab of painted metal with a windscreen high up.
+  const [body, trim, accent] = spec.palette;
+  p.ellipse(0.5, 0.97, 0.46, 0.028, 'rgba(0,0,0,0.32)');
+  wheels(p, 0.90, 0.085, 0.22, 0.78);
+  p.rect(0.06, 0.10, 0.88, 0.80, body);
+  p.rect(0.06, 0.10, 0.88, 0.13, trim);
+  // Windscreen with a driver behind it.
+  p.rect(0.13, 0.26, 0.74, 0.24, '#1e2733');
+  p.rect(0.15, 0.28, 0.70, 0.09, withAlpha('#8fa8bd', 0.35));
+  p.ellipse(0.32, 0.42, 0.055, 0.045, '#2a2118');
+  // Grille and bumper.
+  p.rect(0.13, 0.58, 0.74, 0.14, darken(body, 0.35));
+  for (let i = 0; i < 6; i++) p.rect(0.15 + i * 0.12, 0.60, 0.08, 0.10, darken(body, 0.15));
+  p.rect(0.06, 0.76, 0.88, 0.10, accent);
+  frontLights(p, 0.815, 0.32, 0.045);
+  plate(p, 0.5, 0.885, 0.22);
+  void seed;
+};
+
+const frontCar: VehiclePainter = (p, spec) => {
+  const [body, dark] = spec.palette;
+  p.ellipse(0.5, 0.97, 0.42, 0.03, 'rgba(0,0,0,0.3)');
+  wheels(p, 0.88, 0.095, 0.19, 0.81);
+  p.roundRect(0.10, 0.50, 0.80, 0.38, 0.05, body);
+  p.roundRect(0.19, 0.26, 0.62, 0.26, 0.06, body);
+  p.rect(0.22, 0.29, 0.56, 0.19, '#1e2733');
+  p.rect(0.24, 0.31, 0.52, 0.06, withAlpha('#8fa8bd', 0.4));
+  p.rect(0.13, 0.70, 0.74, 0.09, darken(body, 0.32));
+  frontLights(p, 0.635, 0.30, 0.042);
+  plate(p, 0.5, 0.795, 0.24);
+  p.rect(0.06, 0.40, 0.05, 0.05, dark);
+  p.rect(0.89, 0.40, 0.05, 0.05, dark);
+};
+
+const frontAuto: VehiclePainter = (p, spec) => {
+  const [body, dark, roof] = spec.palette;
+  p.ellipse(0.5, 0.96, 0.34, 0.035, 'rgba(0,0,0,0.3)');
+  // One wheel at the front, which is the whole giveaway.
+  p.ellipse(0.5, 0.86, 0.085, 0.10, '#141619');
+  p.ellipse(0.5, 0.86, 0.038, 0.045, '#8a9099');
+  p.roundRect(0.18, 0.50, 0.64, 0.32, 0.07, body);
+  p.rect(0.18, 0.54, 0.64, 0.08, roof);
+  p.rect(0.20, 0.28, 0.03, 0.24, dark);
+  p.rect(0.77, 0.28, 0.03, 0.24, dark);
+  p.roundRect(0.15, 0.22, 0.70, 0.08, 0.03, roof);
+  // Windscreen, driver, and the single headlamp between the bars.
+  p.rect(0.26, 0.36, 0.48, 0.16, '#1e2733');
+  p.ellipse(0.5, 0.46, 0.06, 0.05, '#2a2118');
+  p.ellipse(0.5, 0.70, 0.085, 0.085, 'rgba(255,228,150,0.28)');
+  p.ellipse(0.5, 0.70, 0.045, 0.045, '#fff2c8');
+};
+
+const frontBike: VehiclePainter = (p, spec) => {
+  const [body, accent, jacket] = spec.palette;
+  p.ellipse(0.5, 0.97, 0.16, 0.022, 'rgba(0,0,0,0.28)');
+  p.ellipse(0.5, 0.86, 0.085, 0.10, '#141619');
+  p.roundRect(0.40, 0.58, 0.20, 0.20, 0.05, body);
+  p.rect(0.40, 0.62, 0.20, 0.02, accent);
+  // Rider facing you.
+  p.roundRect(0.38, 0.36, 0.24, 0.24, 0.07, jacket);
+  p.ellipse(0.50, 0.32, 0.085, 0.06, '#3a3128');
+  p.line(0.32, 0.50, 0.68, 0.50, '#3a3f47', 0.018);
+  p.ellipse(0.5, 0.70, 0.070, 0.070, 'rgba(255,228,150,0.30)');
+  p.ellipse(0.5, 0.70, 0.036, 0.036, '#fff2c8');
+};
+
+/** Which front archetype a vehicle uses when it is coming the other way. */
+const FRONT_VIEW: Record<string, VehiclePainter> = {
+  'bus': frontTall, 'truck': frontTall, 'tempo': frontTall,
+  'maruti800': frontCar,
+  'auto': frontAuto, 'cycle-rickshaw': frontAuto, 'bullock-cart': frontTall,
+  'splendor-family': frontBike, 'activa': frontBike,
+};
+
 export const VEHICLES: Record<string, VehiclePainter> = {
   'auto': autoRickshaw,
   'splendor-family': splendorFamily,
@@ -212,7 +324,11 @@ export const VEHICLES: Record<string, VehiclePainter> = {
   'truck': truck,
   'cycle-rickshaw': cycleRickshaw,
   'bullock-cart': bullockCart,
+  'cow': cow,
 };
 
-export const vehiclePainter = (id: string): VehiclePainter => VEHICLES[id] ?? maruti800;
+export const vehiclePainter = (id: string, oncoming = false): VehiclePainter => {
+  if (oncoming) return FRONT_VIEW[id] ?? frontCar;
+  return VEHICLES[id] ?? maruti800;
+};
 export const vehicleAspect = (id: string): number => VEHICLE_ASPECT[id] ?? 0.9;

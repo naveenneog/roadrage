@@ -96,13 +96,13 @@ export class Effects {
     const t = performance.now() * 0.001;
 
     ctx.save();
-    ctx.strokeStyle = withAlpha(boosting ? '#ffd28a' : '#ffffff', 0.10 + strength * 0.22);
+    ctx.strokeStyle = withAlpha(boosting ? '#ffd28a' : '#ffffff', 0.07 + strength * 0.15);
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i < count; i++) {
       const a = Painter.noise(i * 3.7) * Math.PI * 2 + t * 0.6;
-      const r0 = width * (0.16 + Painter.noise(i * 5.1) * 0.10);
-      const r1 = r0 + width * (0.08 + strength * 0.22);
+      const r0 = width * (0.22 + Painter.noise(i * 5.1) * 0.14);
+      const r1 = r0 + width * (0.05 + strength * 0.14);
       const cx = width / 2;
       const cy = height * 0.56;
       ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0 * 0.6);

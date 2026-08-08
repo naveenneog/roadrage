@@ -51,7 +51,14 @@ export class SpriteAtlas {
   bike(spec: BikeSpec, options: BikeFrameOptions, livery?: { body: string; roof: string }): Sprite {
     const key = `bike:${spec.id}:${frameKey(options)}:${livery?.body ?? ''}`;
     const w = this.baseWidth;
-    return this.make(key, w, w, (p) => paintBike(p, spec, options, livery));
+    return this.make(key, w, w, (p) => {
+      paintBike(p, spec, options, livery);
+      // A key light over the silhouette, then a dark halo underneath it. Both
+      // are one-off costs at atlas build time and are what stop a dark bike
+      // from disappearing into a dark road.
+      p.keyLight(0.20);
+      p.haloBehind(p.ctx.canvas as HTMLCanvasElement, Math.max(3, w * 0.02), 0.5);
+    });
   }
 
   /** Pre-rasterise every frame for a bike so no allocation happens mid-race. */
@@ -66,20 +73,26 @@ export class SpriteAtlas {
     return this.make(key, w, w * aspect, (p) => propPainter(id)(p, variant * 17 + 3));
   }
 
-  vehicle(spec: TrafficSpec, variant: number): Sprite {
-    const key = `veh:${spec.id}:${variant}`;
+  vehicle(spec: TrafficSpec, variant: number, oncoming = false): Sprite {
+    const key = `veh:${spec.id}:${variant}:${oncoming ? 'f' : 'r'}`;
     const w = this.baseWidth;
-    return this.make(key, w, w * vehicleAspect(spec.id), (p) =>
-      vehiclePainter(spec.id)(p, spec, variant * 11 + 5));
+    return this.make(key, w, w * vehicleAspect(spec.id), (p) => {
+      vehiclePainter(spec.id, oncoming)(p, spec, variant * 11 + 5);
+      p.keyLight(0.16);
+      p.haloBehind(p.ctx.canvas as HTMLCanvasElement, Math.max(3, w * 0.018), 0.42);
+    });
   }
 
-  /** Warm every prop and vehicle a circuit will ever ask for. */
+  /** Warm every prop and vehicle a circuit will ever ask for, both directions. */
   warmCircuit(propIds: readonly string[], vehicles: readonly TrafficSpec[], variants = 3): void {
     for (const id of propIds) {
       for (let v = 0; v < variants; v++) this.prop(id, v);
     }
     for (const spec of vehicles) {
-      for (let v = 0; v < variants; v++) this.vehicle(spec, v);
+      for (let v = 0; v < variants; v++) {
+        this.vehicle(spec, v, false);
+        this.vehicle(spec, v, true);
+      }
     }
   }
 

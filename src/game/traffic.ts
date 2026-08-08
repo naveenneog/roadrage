@@ -14,6 +14,15 @@ export class TrafficVehicle {
   phase = 0;
   weaveAmount = 0;
   active = false;
+  /**
+   * Travelling toward you in the opposing lane.
+   *
+   * This is the hazard that defines the genre: the right lane holds slow
+   * traffic going your way, the left lane holds something coming at you at a
+   * combined closing speed of two hundred km/h, and the centre line is the only
+   * safe place to be when you cannot see over the next crest.
+   */
+  oncoming = false;
 
   constructor(public spec: TrafficSpec) {}
 }
@@ -40,12 +49,13 @@ export class TrafficField {
   private readonly weights: Array<{ spec: TrafficSpec; weight: number }>;
   private totalWeight = 0;
   private readonly spacing: number;
+  private readonly oncomingShare: number;
 
   constructor(
     private readonly road: Road,
     circuit: CircuitSpec,
     private readonly rng: Rng,
-    capacity = 14,
+    capacity = 18,
   ) {
     this.weights = circuit.traffic.map((entry) => {
       const spec = getTraffic(entry.id);
@@ -54,8 +64,11 @@ export class TrafficField {
     });
     const density = clamp(circuit.trafficDensity, 0.1, 1);
     this.spacing = lerp(SPACING_SPARSE, SPACING_DENSE, density);
-    // Only ever simulate enough vehicles to fill the visible window plus a margin.
-    const needed = Math.ceil((SPAWN_AHEAD + RECYCLE_BEHIND) / this.spacing) + 2;
+    this.oncomingShare = clamp(circuit.oncomingShare ?? 0.4, 0, 0.75);
+    // Only ever simulate enough vehicles to fill the visible window plus a
+    // margin. Oncoming traffic burns through the window faster, so the pool
+    // is sized for the combined closing rate rather than the spacing alone.
+    const needed = Math.ceil((SPAWN_AHEAD + RECYCLE_BEHIND) / this.spacing) + 3;
     const size = clamp(needed, 3, capacity);
     for (let i = 0; i < size; i++) this.vehicles.push(new TrafficVehicle(this.pickSpec()));
   }
@@ -80,26 +93,42 @@ export class TrafficField {
 
   private respawn(vehicle: TrafficVehicle, z: number): void {
     vehicle.spec = this.pickSpec();
-    vehicle.z = z % this.road.length;
+    vehicle.z = ((z % this.road.length) + this.road.length) % this.road.length;
     const halfWidth = Math.max(0.4, this.road.widthAt(vehicle.z) - vehicle.spec.width);
-    vehicle.x = this.rng.range(-halfWidth, halfWidth);
+
+    // A share of the traffic comes the other way. Indian roads are rarely
+    // divided, and the opposing lane is where the real danger lives.
+    vehicle.oncoming = this.rng.chance(this.oncomingShare) && vehicle.spec.id !== 'cow';
+
+    if (vehicle.oncoming) {
+      // Keep to their own side: the left half of the carriageway from your
+      // point of view, which is the side you must never wander into blind.
+      vehicle.x = this.rng.range(-halfWidth, -0.10);
+    } else {
+      vehicle.x = this.rng.range(-0.05, halfWidth);
+    }
+
     vehicle.speed = kmhToUnits(this.rng.range(vehicle.spec.minKmh, vehicle.spec.maxKmh));
     vehicle.phase = this.rng.range(0, Math.PI * 2);
-    vehicle.weaveAmount = vehicle.spec.weaves * this.rng.range(0.3, 1);
+    vehicle.weaveAmount = vehicle.spec.weaves * this.rng.range(0.3, 1) * (vehicle.oncoming ? 0.45 : 1);
     vehicle.active = true;
   }
 
   update(dt: number, playerZ: number): void {
     for (const vehicle of this.vehicles) {
       if (!vehicle.active) continue;
-      vehicle.z += vehicle.speed * dt;
+      // Oncoming traffic closes on you instead of running away from you.
+      vehicle.z += (vehicle.oncoming ? -vehicle.speed : vehicle.speed) * dt;
       if (vehicle.z >= this.road.length) vehicle.z -= this.road.length;
+      if (vehicle.z < 0) vehicle.z += this.road.length;
 
       // The weave is what makes Indian traffic Indian: nobody holds a lane.
       vehicle.phase += dt * (0.4 + vehicle.weaveAmount * 0.9);
       const halfWidth = Math.max(0.35, this.road.widthAt(vehicle.z) - vehicle.spec.width);
       const drift = Math.sin(vehicle.phase) * vehicle.weaveAmount * 0.55;
-      vehicle.x = clamp(vehicle.x * 0.985 + drift * dt * 2.2, -halfWidth, halfWidth);
+      const lo = vehicle.oncoming ? -halfWidth : -0.05;
+      const hi = vehicle.oncoming ? -0.10 : halfWidth;
+      vehicle.x = clamp(vehicle.x * 0.985 + drift * dt * 2.2, Math.min(lo, hi), Math.max(lo, hi));
 
       const gap = loopDelta(playerZ, vehicle.z, this.road.length);
       if (gap < -RECYCLE_BEHIND || gap > SPAWN_AHEAD * 1.4) {
@@ -135,7 +164,11 @@ export const collideWithTraffic = (
     if (dz < -110 || dz > 190) continue;
     if (Math.abs(vehicle.x - racer.x) > vehicle.spec.width * 0.5 + 0.16) continue;
 
-    const closing = Math.max(0, racer.speed - vehicle.speed);
+    // A head-on closes at the sum of both speeds, not the difference. Meeting a
+    // truck in the opposing lane at 140 km/h is meant to end your race.
+    const closing = vehicle.oncoming
+      ? racer.speed + vehicle.speed
+      : Math.max(0, racer.speed - vehicle.speed);
     if (closing < 50) continue;
 
     // One collision per encounter, not one per frame while overlapping.
@@ -155,7 +188,9 @@ export const collideWithTraffic = (
     // Push past rather than through: you get squeezed out around the obstacle.
     racer.x = clamp(racer.x + Math.sign(racer.x - vehicle.x || 1) * 0.18, -2.6, 2.6);
 
-    const goesDown = resisted > 0.62;
+    // Head-ons put you down at a much lower threshold — but a glancing meeting
+    // with a scooter should still be survivable.
+    const goesDown = resisted > (vehicle.oncoming ? 0.44 : 0.62);
     if (goesDown) knockDown(racer, 2.4);
 
     return { vehicle, power, knockedDown: goesDown };

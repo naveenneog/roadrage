@@ -86,7 +86,14 @@ export interface SurfacePalette {
   road: [string, string];
   rumble: [string, string];
   lane: string;
+  /** Kerb stone immediately outside the rumble strip. */
+  kerb: [string, string];
+  /** Near shoulder: footpath in a city, gravel on a highway, mud in a ghat. */
+  shoulder: [string, string];
+  /** The far ground running out to the horizon. */
   grass: [string, string];
+  /** Scattered detail on the shoulder — cracks, gravel, litter, puddles. */
+  detail: [string, string];
   fog: string;
 }
 
@@ -124,6 +131,11 @@ export interface CircuitSpec {  id: string;
   /** Traffic vehicles that appear, with relative frequency. */
   traffic: Array<{ id: string; weight: number }>;
   trafficDensity: number;
+  /**
+   * Fraction of traffic travelling toward you. Zero on a divided carriageway,
+   * high on an undivided two-lane where the opposing lane is a real hazard.
+   */
+  oncomingShare?: number;
   /** Fog thickness — Malshej in monsoon is a different game to Marine Drive at noon. */
   fogDensity: number;
   /** Prize money for first place. */

@@ -128,9 +128,12 @@ const avoidTraffic = (
     if (!vehicle.active) continue;
     const dz = loopDelta(racer.z, vehicle.z, road.length);
     if (dz < 60 || dz > horizon) continue;
-    if (vehicle.speed >= racer.speed) continue;
-    if (!nearest || dz < nearest.dz) {
-      nearest = { dz, x: vehicle.x, width: vehicle.spec.width };
+    // Oncoming traffic is always a threat regardless of its speed, and it is
+    // closing far faster than the gap suggests.
+    if (!vehicle.oncoming && vehicle.speed >= racer.speed) continue;
+    const urgency = vehicle.oncoming ? dz * 0.55 : dz;
+    if (!nearest || urgency < nearest.dz) {
+      nearest = { dz: urgency, x: vehicle.x, width: vehicle.spec.width };
     }
   }
 
@@ -157,9 +160,10 @@ const chooseLine = (
   const segment = road.findSegment(racer.z + 1600);
   const halfWidth = Math.max(0.35, segment.width - 0.14);
 
-  // Take the inside of the bend, in proportion to skill.
+  // Take the inside of the bend, in proportion to skill, but bias toward the
+  // left-of-centre racing line — the opposing lane belongs to oncoming traffic.
   const apex = clamp(-Math.sign(segment.curve) * Math.min(1, Math.abs(segment.curve) / 6) * ai.skill, -1, 1);
-  let line = apex * halfWidth;
+  let line = clamp(apex * halfWidth * 0.7 + 0.18 * halfWidth, -halfWidth, halfWidth);
 
   // Bullies drift toward the player when they're close enough to do something about it.
   const gapToPlayer = loopDelta(racer.z, player.z, road.length);
