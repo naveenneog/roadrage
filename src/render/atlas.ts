@@ -1,6 +1,6 @@
 import type { BikeSpec } from '../data/types.ts';
 import { Painter } from './painter.ts';
-import { BIKE_FRAMES, frameKey, paintBike, type BikeFrameOptions } from './sprites/bike.ts';
+import { BIKE_FRAMES, frameKey, paintBike, paintBikeWheel, type BikeFrameOptions } from './sprites/bike.ts';
 import { propAspect, propPainter } from './sprites/props.ts';
 import { vehicleAspect, vehiclePainter } from './sprites/vehicles.ts';
 import type { TrafficSpec } from '../data/types.ts';
@@ -29,9 +29,16 @@ export class SpriteAtlas {
   private readonly cache = new Map<string, Sprite>();
   /** Base pixel width for a prop at its largest on-screen size. */
   private readonly baseWidth: number;
+  /**
+   * The player's bike fills nearly half the screen height, so it is rasterised
+   * at a much higher resolution than everything else. Upscaling a 288px sprite
+   * to 450px is exactly why it looked soft.
+   */
+  private readonly heroWidth: number;
 
   constructor(quality: 'low' | 'medium' | 'high' = 'high') {
     this.baseWidth = quality === 'low' ? 128 : quality === 'medium' ? 192 : 288;
+    this.heroWidth = quality === 'low' ? 320 : quality === 'medium' ? 448 : 640;
   }
 
   private make(key: string, w: number, h: number, draw: (p: Painter) => void): Sprite {
@@ -61,9 +68,43 @@ export class SpriteAtlas {
     });
   }
 
+  /**
+   * The player's bike, at hero resolution and without its rear wheel — the
+   * renderer draws and spins that separately so the machine visibly turns.
+   */
+  heroBike(spec: BikeSpec, options: BikeFrameOptions, livery?: { body: string; roof: string }): Sprite {
+    const key = `hero:${spec.id}:${frameKey(options)}:${livery?.body ?? ''}`;
+    const w = this.heroWidth;
+    return this.make(key, w, w, (p) => {
+      paintBike(p, spec, { ...options, bodyOnly: !spec.threeWheeler }, livery);
+      p.keyLight(0.20);
+      // Hard contour first, then a soft halo outside it. The hard edge is what
+      // makes the machine read; the halo just lifts it off the tarmac.
+      p.outline(p.ctx.canvas as HTMLCanvasElement, Math.max(2, Math.round(w * 0.0075)));
+      p.haloBehind(p.ctx.canvas as HTMLCanvasElement, Math.max(4, w * 0.016), 0.5);
+    });
+  }
+
+  /** The player's rear wheel as a square, centred sprite, ready to be rotated. */
+  heroWheel(spec: BikeSpec): Sprite {
+    const key = `wheel:${spec.id}`;
+    const w = Math.round(this.heroWidth * 0.55);
+    return this.make(key, w, w, (p) => {
+      paintBikeWheel(p, spec);
+      p.keyLight(0.14);
+      p.outline(p.ctx.canvas as HTMLCanvasElement, Math.max(2, Math.round(w * 0.010)));
+    });
+  }
+
   /** Pre-rasterise every frame for a bike so no allocation happens mid-race. */
   warmBike(spec: BikeSpec, livery?: { body: string; roof: string }): void {
     for (const frame of BIKE_FRAMES) this.bike(spec, frame, livery);
+  }
+
+  /** Pre-rasterise the player's hero frames and wheel. */
+  warmHero(spec: BikeSpec, livery?: { body: string; roof: string }): void {
+    for (const frame of BIKE_FRAMES) this.heroBike(spec, frame, livery);
+    this.heroWheel(spec);
   }
 
   prop(id: string, variant: number): Sprite {

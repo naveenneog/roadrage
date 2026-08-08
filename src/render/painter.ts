@@ -217,6 +217,34 @@ export class Painter {
   }
 
   /**
+   * Draw a hard dark outline behind everything already on the canvas.
+   *
+   * The silhouette is stamped in eight directions underneath the artwork, which
+   * dilates it by `thickness` pixels in every direction. Unlike a blur this
+   * keeps a crisp edge, and a crisp dark edge is the single reason classic
+   * sprite art stays readable against a busy road at any size.
+   */
+  outline(canvas: HTMLCanvasElement, thickness = 3): this {
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
+    // `brightness(0)` recolours the stamped copies to flat black while keeping
+    // their alpha, so only the silhouette is darkened — never the whole box.
+    ctx.filter = 'brightness(0) saturate(0)';
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.drawImage(
+        canvas,
+        Math.round(Math.cos(a) * thickness),
+        Math.round(Math.sin(a) * thickness),
+        this.w, this.h,
+      );
+    }
+    ctx.restore();
+    return this;
+  }
+
+  /**
    * Draw a dark halo behind everything already on the canvas.
    *
    * `destination-over` paints underneath, so a blurred copy of the silhouette

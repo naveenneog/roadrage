@@ -12,6 +12,7 @@ import { Painter } from './painter.ts';
 import { mix, withAlpha } from './palette.ts';
 import { paintSegment } from './road-painter.ts';
 import type { BikeFrameOptions } from './sprites/bike.ts';
+import { PLAYER_SPRITE_HEIGHT, PlayerView } from './player-view.ts';
 import { propWorldWidth } from './sprites/props.ts';
 
 export interface RenderQuality {
@@ -39,8 +40,6 @@ const SCENERY_NEAR_Z = 4200;
 const SCENERY_FADE_Z = 500;
 /** Below this on-screen width a prop is a smudge; skipping it is free frames. */
 const MIN_PROP_PIXELS = 5;
-/** The player's bike as a fraction of screen height; entities are clamped to it. */
-const PLAYER_SPRITE_HEIGHT = 0.42;
 
 /**
  * Draws one frame of the race.
@@ -68,6 +67,13 @@ export class Renderer {
   private speedBlur = 0;
   /** Blended from the circuit's haze and its surface fog when a race is prepared. */
   private fogColour = '#c9d4dc';
+  /** Owns everything about how the player's own machine is drawn and animated. */
+  private readonly playerView: PlayerView;
+
+  /** Tell the renderer which livery the player's machine wears. */
+  setPlayerLivery(livery: { body: string; roof: string } | undefined): void {
+    this.playerView.setLivery(livery);
+  }
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
@@ -78,6 +84,12 @@ export class Renderer {
     this.effects = new Effects({
       particles: this.quality.particles,
       speedLines: this.quality.speedLines,
+    });
+    this.playerView = new PlayerView({
+      atlas: this.atlas,
+      effects: this.effects,
+      // Read through a closure: quality is swapped at runtime by the governor.
+      particles: () => this.quality.particles,
     });
   }
 
@@ -156,7 +168,7 @@ export class Renderer {
     this.drawRoad(ctx, road, baseSegment, basePercent, player, cameraY, position, circuit);
     this.drawEntities(ctx, race, road, baseSegment, player);
     this.drawHaze(ctx, width, height, horizon, circuit);
-    this.drawPlayer(ctx, race, player);
+    this.playerView.draw(ctx, player, this.frameFor(player), width, height, dt);
 
     ctx.restore();
 
@@ -420,34 +432,6 @@ export class Renderer {
     ctx.globalAlpha = at.fog;
     ctx.drawImage(sprite.canvas, at.x - destW / 2, at.y - destH, destW, destH);
     ctx.globalAlpha = 1;
-  }
-
-  /** The player is always drawn last, at a fixed place on screen. */
-  private drawPlayer(ctx: CanvasRenderingContext2D, race: Race, player: Racer): void {
-    const sprite = this.atlas.bike(player.bike, this.frameFor(player));
-    // Sized against height rather than width so an ultrawide monitor doesn't get
-    // a motorcycle the size of a bus.
-    const destH = this.height * PLAYER_SPRITE_HEIGHT;
-    const destW = (sprite.width / sprite.height) * destH;
-    const bob = Math.sin(performance.now() * 0.012) * player.speedPercent * 3;
-    const wobble = player.wobble * Math.sin(performance.now() * 0.05) * 12;
-    const airLift = player.y * 0.05;
-
-    const x = this.width / 2 - destW / 2 + player.lean * this.width * 0.018 + wobble;
-    const y = this.height - destH * 0.98 + bob - airLift;
-
-    // Shadow shrinks and detaches when airborne — the only cue that you are flying.
-    if (player.y > 0) {
-      ctx.globalAlpha = clamp(1 - player.y / 900, 0.15, 0.6);
-      ctx.fillStyle = '#000';
-      ctx.beginPath();
-      ctx.ellipse(this.width / 2, this.height - destH * 0.12, destW * 0.3, destH * 0.045, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.drawImage(sprite.canvas, x, y, destW, destH);
-    void race;
   }
 
   private drawDebug(ctx: CanvasRenderingContext2D, race: Race): void {

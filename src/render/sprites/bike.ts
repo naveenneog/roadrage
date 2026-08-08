@@ -1,6 +1,6 @@
 import type { BikePalette, BikeSpec } from '../../data/types.ts';
 import { Painter } from '../painter.ts';
-import { darken, lighten, mix, withAlpha } from '../palette.ts';
+import { darken, lighten, luminance, mix, withAlpha } from '../palette.ts';
 
 /**
  * Rear-three-quarter view of a rider on a bike, drawn entirely in code.
@@ -23,7 +23,52 @@ export interface BikeFrameOptions {
   down: boolean;
   /** 0..1 brake-light and rear-lamp intensity. */
   lamp: number;
+  /** Omit the rear wheel so the renderer can draw and spin its own. */
+  bodyOnly?: boolean;
 }
+
+/** Where the rear wheel sits in the sprite box, so the renderer can place it. */
+export const wheelAnchor = (spec: BikeSpec): { y: number; r: number } => {
+  const prop = proportionsFor(spec);
+  return { y: WHEEL_Y, r: prop.wheel };
+};
+
+/**
+ * The rear tyre's centre. Fixed for every machine so the contact patch — and
+ * therefore the pivot the renderer leans about — is always in the same place.
+ */
+const WHEEL_Y = 0.795;
+
+/**
+ * Lift a colour until it is unmistakably brighter than the machine.
+ *
+ * Several of the authored jackets are near-black, which is accurate to the
+ * real thing and useless on screen: the rider merges into the bike and the
+ * whole sprite becomes one shape. Riders are the read, so they get a floor.
+ */
+const hiVis = (hex: string, floor = 0.34): string => {
+  const l = luminance(hex);
+  return l >= floor ? hex : lighten(hex, Math.min(0.78, (floor - l) * 1.9));
+};
+
+/**
+ * The rider's jacket, guaranteed to separate from the machine.
+ *
+ * A jacket darker than about a quarter value is pulled toward the bike's accent
+ * colour first — that keeps each machine's character instead of washing every
+ * rider to the same grey. The value is then pushed away from the tank's in
+ * whichever direction there is room: on a white RD350 the readable answer is a
+ * darker jacket, not a brighter one.
+ */
+export const jacketFor = (palette: BikePalette): string => {
+  const base = luminance(palette.riderJacket) < 0.30
+    ? mix(palette.riderJacket, palette.accent, 0.64)
+    : palette.riderJacket;
+  const tank = luminance(palette.tank);
+  const lifted = hiVis(base, 0.46);
+  if (Math.abs(luminance(lifted) - tank) >= 0.20) return lifted;
+  return tank > 0.5 ? darken(base, 0.52) : lighten(base, 0.42);
+};
 
 /** Silhouette proportions derived from the real machine. */
 interface Proportions {
@@ -44,69 +89,99 @@ const proportionsFor = (spec: BikeSpec): Proportions => {
   const long = Math.min(1, (spec.wheelbaseMm - 1220) / 240);
   switch (spec.class) {
     case 'classic':
-      return { width: 0.62 + mass * 0.14, stance: 0.60, tank: 0.90, wheel: 0.175, fairing: 0 };
+      return { width: 0.44 + mass * 0.09, stance: 0.60, tank: 0.90, wheel: 0.192, fairing: 0 };
     case 'twostroke':
-      return { width: 0.50 + mass * 0.10, stance: 0.56, tank: 0.62, wheel: 0.150, fairing: 0.1 };
+      return { width: 0.37 + mass * 0.07, stance: 0.56, tank: 0.62, wheel: 0.170, fairing: 0.1 };
     case 'sport':
-      return { width: 0.54 + mass * 0.12, stance: 0.52, tank: 0.72, wheel: 0.160, fairing: 0.65 };
+      return { width: 0.39 + mass * 0.08, stance: 0.52, tank: 0.72, wheel: 0.184, fairing: 0.65 };
     case 'modern':
-      return { width: 0.58 + mass * 0.14 + long * 0.04, stance: 0.55, tank: 0.82, wheel: 0.170, fairing: 0.35 };
+      return { width: 0.41 + mass * 0.09 + long * 0.03, stance: 0.55, tank: 0.82, wheel: 0.188, fairing: 0.35 };
     case 'commuter':
-      return { width: 0.46, stance: 0.58, tank: 0.55, wheel: 0.150, fairing: 0 };
+      return { width: 0.34, stance: 0.58, tank: 0.55, wheel: 0.164, fairing: 0 };
     default:
       return { width: 0.86, stance: 0.62, tank: 0.70, wheel: 0.150, fairing: 0 };
   }
 };
 
-const drawWheel = (
-  p: Painter,
-  cx: number,
-  cy: number,
-  r: number,
-  palette: BikePalette,
-  spoked: boolean,
-  blur: number,
-): void => {
-  // Tyre: a dark band with a lit shoulder, so it reads as round rather than flat.
-  p.ellipse(cx, cy, r, r * 0.96, '#0a0b0d');
-  p.ellipse(cx, cy, r * 0.94, r * 0.90, '#17191d');
-  p.ellipse(cx - r * 0.22, cy - r * 0.12, r * 0.36, r * 0.5, '#232629');
-  // Tread blocks, smeared into a band once the wheel is turning.
-  if (blur < 0.5) {
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2 + blur * 6;
-      p.rect(cx + Math.cos(a) * r * 0.86 - r * 0.06, cy + Math.sin(a) * r * 0.82 - r * 0.05,
-        r * 0.12, r * 0.10, '#0d0e10');
+/**
+ * The rear wheel as its own sprite, so it can be rotated live.
+ *
+ * Baking the wheel into the body means the bike never visibly turns — the
+ * single biggest reason a static rear-view sprite reads as a cardboard cutout.
+ * Drawn square and centred so the renderer can spin it about its middle.
+ */
+export const paintBikeWheel = (p: Painter, spec: BikeSpec): void => {
+  const palette = spec.palette;
+  const spoked = spec.class === 'classic' || spec.class === 'twostroke' || spec.class === 'commuter';
+  const r = 0.46;
+
+  // Tyre: dark band with a lit shoulder so it reads as round, not flat.
+  p.ellipse(0.5, 0.5, r, r, '#08090b');
+  p.ellipse(0.5, 0.5, r * 0.97, r * 0.97, '#191b1f');
+  p.ellipse(0.5 - r * 0.18, 0.5 - r * 0.16, r * 0.42, r * 0.46, '#272a2f');
+
+  // Tread blocks around the shoulder — these are what make the spin visible.
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    p.rect(
+      0.5 + Math.cos(a) * r * 0.88 - r * 0.07,
+      0.5 + Math.sin(a) * r * 0.88 - r * 0.06,
+      r * 0.14, r * 0.12, '#0c0d10',
+    );
+  }
+
+  // Rim.
+  p.ellipse(0.5, 0.5, r * 0.66, r * 0.66, darken(palette.rim, 0.45));
+  p.ellipse(0.5, 0.5, r * 0.60, r * 0.60, darken(palette.rim, 0.12));
+  p.ellipse(0.5, 0.5, r * 0.54, r * 0.54, '#15171a');
+
+  if (spoked) {
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      p.line(
+        0.5 + Math.cos(a) * r * 0.16, 0.5 + Math.sin(a) * r * 0.16,
+        0.5 + Math.cos(a) * r * 0.56, 0.5 + Math.sin(a) * r * 0.56,
+        lighten(palette.rim, 0.25), 0.014,
+      );
+    }
+  } else {
+    // Cast alloy: five fat spokes.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      p.line(0.5, 0.5,
+        0.5 + Math.cos(a) * r * 0.56, 0.5 + Math.sin(a) * r * 0.56,
+        palette.rim, 0.075);
     }
   }
 
-  p.ellipse(cx, cy, r * 0.70, r * 0.64, darken(palette.rim, 0.35));
-  if (spoked) {
-    // Spokes smear into a disc once the wheel is turning — that smear is what
-    // reads as rotation at speed, so it is drawn rather than avoided.
-    const visible = blur > 0.45 ? 4 : 9;
-    for (let i = 0; i < visible; i++) {
-      const a = (i / visible) * Math.PI + blur * 3.4;
-      p.line(
-        cx - Math.cos(a) * r * 0.60, cy - Math.sin(a) * r * 0.55,
-        cx + Math.cos(a) * r * 0.60, cy + Math.sin(a) * r * 0.55,
-        withAlpha(palette.rim, 0.8 - blur * 0.35), 0.011,
-      );
-    }
-    p.ellipse(cx, cy, r * 0.62, r * 0.57, withAlpha(palette.rim, blur * 0.28));
-  } else {
-    // Cast alloy: three fat spokes plus a lit face.
-    p.ellipse(cx, cy, r * 0.60, r * 0.55, darken(palette.rim, 0.15));
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2 + blur * 4;
-      p.line(cx, cy, cx + Math.cos(a) * r * 0.58, cy + Math.sin(a) * r * 0.54,
-        palette.rim, 0.055);
-    }
-    p.ellipse(cx, cy, r * 0.30, r * 0.28, darken(palette.rim, 0.4));
+  // Brake disc and hub.
+  p.ellipse(0.5, 0.5, r * 0.30, r * 0.30, mix(palette.rim, '#8c939b', 0.55));
+  p.ellipse(0.5, 0.5, r * 0.24, r * 0.24, '#2a2d33');
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3;
+    p.circle(0.5 + Math.cos(a) * r * 0.17, 0.5 + Math.sin(a) * r * 0.17, r * 0.035, '#15171a');
   }
-  // Hub and brake disc.
-  p.ellipse(cx, cy, r * 0.20, r * 0.19, mix(palette.rim, '#7d848c', 0.5));
-  p.ellipse(cx, cy, r * 0.11, r * 0.10, '#1b1d21');
+  p.ellipse(0.5, 0.5, r * 0.12, r * 0.12, lighten(palette.rim, 0.1));
+};
+/**
+ * A filled band between two radii — used for the mudguard curving over the tyre.
+ * Assumes a square sprite box, which every bike frame is.
+ */
+const arcBand = (
+  p: Painter, cx: number, cy: number,
+  rInner: number, rOuter: number, a0: number, a1: number, fill: string,
+): void => {
+  const pts: Array<readonly [number, number]> = [];
+  const steps = 16;
+  for (let i = 0; i <= steps; i++) {
+    const a = a0 + ((a1 - a0) * i) / steps;
+    pts.push([cx + Math.cos(a) * rOuter, cy + Math.sin(a) * rOuter]);
+  }
+  for (let i = steps; i >= 0; i--) {
+    const a = a0 + ((a1 - a0) * i) / steps;
+    pts.push([cx + Math.cos(a) * rInner, cy + Math.sin(a) * rInner]);
+  }
+  p.poly(pts, fill);
 };
 
 const drawRider = (
@@ -115,56 +190,90 @@ const drawRider = (
   prop: Proportions,
   options: BikeFrameOptions,
 ): void => {
-  const jacket = palette.riderJacket;
-  const helmet = palette.riderHelmet;
-  const shadow = darken(jacket, 0.38);
-  const lit = lighten(jacket, 0.20);
-  const halfBody = prop.width * 0.27;
-  const torsoTop = 0.20 + prop.fairing * 0.04 - (prop.stance - 0.56) * 0.12;
-  const torsoBottom = 0.50;
+  const jacket = jacketFor(palette);
+  const helmet = hiVis(palette.riderHelmet, 0.30);
+  const shadow = darken(jacket, 0.42);
+  const lit = lighten(jacket, 0.26);
+  const halfBody = prop.width * 0.26;
+  const torsoTop = 0.155 + prop.fairing * 0.03 - (prop.stance - 0.56) * 0.10;
+  const torsoBottom = 0.425;
   // Weight shifts across the seat with the lean, and the shoulders counter-lean
   // slightly — that offset is what makes a turn read as a rider, not a decal.
   const shift = options.lean * 0.022;
   const counter = -options.lean * 0.010;
+  // Boots sit just outside the tyre so the wheel is never hidden behind a pair
+  // of thighs, but the knees stay tucked against the tank where they belong.
+  const bootX = prop.wheel + 0.024;
+  const kneeX = prop.wheel * 0.58;
+  // Trousers are the raw authored jacket colour rather than the brightened one:
+  // the rider's legs are in the machine's shadow, and a light lower half turns
+  // the whole sprite into a bottom-heavy blob.
+  const trouser = darken(palette.riderJacket, 0.18);
 
   // Legs gripping the tank, the outside one pushed out through a turn.
   const outerLeg = options.lean > 0 ? 1 : -1;
   for (const side of [-1, 1] as const) {
-    const flare = side === outerLeg ? Math.abs(options.lean) * 0.018 : 0;
-    p.rect(0.5 + side * (halfBody * 0.70 + flare) - halfBody * 0.30 + shift, 0.42,
-      halfBody * 0.60, 0.22, side < 0 ? darken(jacket, 0.50) : darken(jacket, 0.58));
-    // Knee highlight.
-    p.rect(0.5 + side * (halfBody * 0.70 + flare) - halfBody * 0.22 + shift, 0.47,
-      halfBody * 0.20, 0.05, darken(jacket, 0.34));
+    const flare = side === outerLeg ? Math.abs(options.lean) * 0.014 : 0;
+    const kx = 0.5 + side * (kneeX + flare) + shift;
+    const bx = 0.5 + side * (bootX + flare) + shift;
+    // Hip to knee, then knee to boot.
+    p.line(0.5 + side * halfBody * 0.58 + shift, 0.400, kx, 0.516, trouser, 0.074);
+    p.line(kx, 0.510, bx, 0.626, darken(trouser, 0.28), 0.060);
+    // Knee armour catches the light and pins the joint.
+    p.circle(kx, 0.514, 0.026, darken(trouser, 0.34));
+    p.circle(kx - side * 0.005, 0.508, 0.014, lighten(trouser, 0.22));
   }
   // Boots on the pegs.
   for (const side of [-1, 1] as const) {
-    const flare = side === outerLeg ? Math.abs(options.lean) * 0.018 : 0;
-    p.roundRect(0.5 + side * (halfBody * 0.72 + flare) - halfBody * 0.34 + shift, 0.625,
-      halfBody * 0.68, 0.058, 0.02, '#191a1c');
-    p.rect(0.5 + side * (halfBody * 0.72 + flare) - halfBody * 0.30 + shift, 0.627,
-      halfBody * 0.58, 0.012, '#2c2e32');
+    const flare = side === outerLeg ? Math.abs(options.lean) * 0.014 : 0;
+    const bx = 0.5 + side * (bootX + flare) + shift;
+    p.roundRect(bx - 0.044, 0.616, 0.088, 0.052, 0.018, '#16181b');
+    p.rect(bx - 0.036, 0.621, 0.072, 0.009, '#3a3e45');
+    p.rect(bx - 0.044, 0.657, 0.088, 0.011, '#08090b');
+    // Peg poking out under the heel.
+    p.rect(bx - side * 0.056, 0.642, 0.028, 0.012, mix(palette.rim, '#70767e', 0.6));
   }
 
-  // Torso, seen from behind, with a lit shoulder and a shadowed flank.
+  // Torso, seen from behind: shoulders wide, waist narrow. A plain rectangle
+  // here is why the rider read as a slab — a person tapers.
   const tx = 0.5 + shift + counter;
-  p.roundRect(tx - halfBody, torsoTop, halfBody * 2, torsoBottom - torsoTop, 0.075, jacket);
-  p.rect(tx - halfBody, torsoBottom - 0.085, halfBody * 2, 0.085, shadow);
-  // Backpack-free spine ridge plus a shoulder highlight on the raised side.
-  p.rect(tx - halfBody * 0.14, torsoTop + 0.01, halfBody * 0.28, torsoBottom - torsoTop - 0.07, lit);
-  p.roundRect(tx - halfBody * (options.lean >= 0 ? 1 : 0.34), torsoTop + 0.005,
-    halfBody * 0.66, 0.07, 0.03, lit);
-  // Jacket hem catching the wind.
+  const waist = halfBody * 0.74;
+  const shoulderY = torsoTop + 0.055;
   p.poly([
-    [tx - halfBody, torsoBottom - 0.02],
-    [tx + halfBody, torsoBottom - 0.02],
-    [tx + halfBody * 0.86, torsoBottom + 0.045],
-    [tx - halfBody * 0.86, torsoBottom + 0.03],
+    [tx - halfBody * 0.78, torsoTop],
+    [tx + halfBody * 0.78, torsoTop],
+    [tx + halfBody, shoulderY],
+    [tx + waist, torsoBottom],
+    [tx - waist, torsoBottom],
+    [tx - halfBody, shoulderY],
+  ], jacket);
+  // Shaded flank down the right, so the back is a cylinder and not a card.
+  p.poly([
+    [tx + halfBody * 0.30, torsoTop + 0.010],
+    [tx + halfBody * 0.86, shoulderY],
+    [tx + waist, torsoBottom],
+    [tx + waist * 0.36, torsoBottom],
   ], shadow);
+  // Spine ridge and the lit shoulder on the raised side.
+  p.rect(tx - halfBody * 0.13, torsoTop + 0.020, halfBody * 0.26, torsoBottom - torsoTop - 0.055,
+    lighten(jacket, 0.14));
+  p.roundRect(tx - halfBody * (options.lean >= 0 ? 0.94 : 0.30), torsoTop + 0.014,
+    halfBody * 0.62, 0.062, 0.026, lit);
+  // Racing hump behind the helmet — the silhouette cue that says leathers.
+  p.ellipse(tx, torsoTop + 0.018, halfBody * 0.46, 0.030, lit);
+  // Belt, dark, where the jacket meets the trousers. Two shapes instead of one
+  // is what stops the rider merging into a single vertical smear.
+  p.roundRect(tx - waist * 1.06, torsoBottom - 0.030, waist * 2.12, 0.044, 0.014,
+    darken(palette.riderJacket, 0.35));
+  p.rect(tx - waist * 0.22, torsoBottom - 0.024, waist * 0.44, 0.030,
+    mix(palette.accent, '#3a3d43', 0.4));
 
   // Arms reaching to the bars; the swinging one leaves the handlebar.
+  // Each arm is stroked twice — a dark casing then a lighter core — so it stays
+  // a distinct limb against the torso instead of merging into one blob.
   const armY = torsoTop + 0.085;
   const swing = options.action;
+  const armDark = darken(jacket, 0.62);
   for (const side of [-1, 1] as const) {
     const swinging = swing > 0 && side === options.actionSide;
     const reach = swinging ? (swing === 2 ? 0.34 : 0.27) : halfBody * 1.20;
@@ -174,58 +283,101 @@ const drawRider = (
     // Upper arm then forearm, with a bend at the elbow.
     const elbowX = (shoulderX + handX) / 2 + side * 0.018;
     const elbowY = armY + drop * 0.45 + 0.022;
-    p.line(shoulderX, armY, elbowX, elbowY, swinging ? lit : jacket, 0.055);
-    p.line(elbowX, elbowY, handX, armY + drop, swinging ? lit : darken(jacket, 0.12), 0.046);
+    const core = swinging ? lighten(jacket, 0.34) : lighten(jacket, 0.12);
+    p.line(shoulderX, armY, elbowX, elbowY, armDark, 0.068);
+    p.line(elbowX, elbowY, handX, armY + drop, armDark, 0.058);
+    p.line(shoulderX, armY, elbowX, elbowY, core, 0.048);
+    p.line(elbowX, elbowY, handX, armY + drop, swinging ? core : jacket, 0.038);
+    // Elbow armour catches the light and pins the joint.
+    p.circle(elbowX, elbowY, 0.026, armDark);
+    p.circle(elbowX - 0.004, elbowY - 0.005, 0.017, lighten(jacket, 0.30));
     // Glove.
-    p.circle(handX, armY + drop, swinging ? 0.036 : 0.026,
-      swinging ? mix(jacket, '#c8a882', 0.7) : '#23252a');
+    p.circle(handX, armY + drop, swinging ? 0.040 : 0.030, '#141518');
+    p.circle(handX - side * 0.005, armY + drop - 0.006, swinging ? 0.030 : 0.021,
+      swinging ? mix(jacket, '#d8b487', 0.7) : '#33363c');
   }
 
-  // Helmet: shell, visor band, rim light and a highlight.
-  const headY = torsoTop - 0.055;
+  // Helmet: shell, visor band, rim light and a highlight. Round, not a disc —
+  // a wide flat ellipse here is what made the rider read as a floating blob.
+  const headY = torsoTop - 0.062;
   const hx = tx + counter * 0.6;
-  p.ellipse(hx, headY, halfBody * 0.78, 0.070, darken(helmet, 0.25));
-  p.ellipse(hx, headY - 0.006, halfBody * 0.74, 0.064, helmet);
-  p.rect(hx - halfBody * 0.72, headY - 0.002, halfBody * 1.44, 0.020, darken(helmet, 0.6));
-  p.ellipse(hx - halfBody * 0.26, headY - 0.026, halfBody * 0.24, 0.018, lighten(helmet, 0.45));
+  const hr = halfBody * 0.62;
+  p.ellipse(hx, headY, hr * 1.06, hr * 1.02, darken(helmet, 0.55));
+  p.ellipse(hx, headY - 0.004, hr, hr * 0.96, helmet);
+  // Visor aperture wrapping round the back of the shell.
+  p.ellipse(hx, headY + 0.004, hr * 0.94, hr * 0.40, darken(helmet, 0.62));
+  p.ellipse(hx, headY + 0.001, hr * 0.86, hr * 0.30, darken(helmet, 0.45));
+  // Sky catching the crown, and a rim light down the lit side.
+  p.ellipse(hx - hr * 0.30, headY - hr * 0.42, hr * 0.40, hr * 0.22, lighten(helmet, 0.50));
+  p.ellipse(hx - hr * 0.86, headY, hr * 0.14, hr * 0.62, lighten(helmet, 0.28));
   // Chin bar peeking under the shell.
-  p.rect(hx - halfBody * 0.40, headY + 0.030, halfBody * 0.80, 0.016, darken(helmet, 0.4));
+  p.ellipse(hx, headY + hr * 0.72, hr * 0.66, hr * 0.24, darken(helmet, 0.35));
 };
 
 /** A downed rider: bike on its side, rider sliding, dust and a scraping spark. */
 const drawWreck = (p: Painter, palette: BikePalette): void => {
-  p.ellipse(0.5, 0.94, 0.40, 0.045, 'rgba(0,0,0,0.34)');
+  p.ellipse(0.5, 0.945, 0.44, 0.050, 'rgba(0,0,0,0.38)');
 
-  // The bike laid over on its side, seen from behind and slightly above.
-  p.save();
-  p.rotate(1.05, 0.52, 0.86);
-  // Wheels first so the body overlaps them, which reads as one machine rather
-  // than a pile of parts.
-  p.ellipse(0.30, 0.80, 0.105, 0.10, '#131518');
-  p.ellipse(0.30, 0.80, 0.055, 0.052, darken(palette.rim, 0.2));
-  p.ellipse(0.74, 0.83, 0.105, 0.10, '#131518');
-  p.ellipse(0.74, 0.83, 0.055, 0.052, darken(palette.rim, 0.2));
-  // Frame, engine, tank and seat as one long body.
-  p.roundRect(0.28, 0.735, 0.48, 0.105, 0.035, palette.frame);
-  p.roundRect(0.34, 0.705, 0.30, 0.075, 0.03, palette.tank);
-  p.rect(0.34, 0.732, 0.30, 0.016, palette.tankStripe);
-  p.roundRect(0.42, 0.775, 0.26, 0.055, 0.02, palette.engine);
-  // Bars pointing up at the sky, the clearest read that it is on its side.
-  p.line(0.30, 0.72, 0.24, 0.62, darken(palette.rim, 0.2), 0.020);
-  p.restore();
+  // The machine laid over on its side and sliding away from the viewer. Drawn
+  // with explicit coordinates rather than one big rotation: a rotated upright
+  // bike reads as a glitch, a purpose-drawn one reads as a crash.
+  // Wheels first so the body overlaps them and it stays one machine.
+  p.ellipse(0.26, 0.760, 0.150, 0.128, '#0b0c0e');
+  p.ellipse(0.26, 0.760, 0.135, 0.114, '#1b1d21');
+  p.ellipse(0.26, 0.760, 0.078, 0.066, darken(palette.rim, 0.25));
+  p.ellipse(0.26, 0.760, 0.032, 0.027, mix(palette.rim, '#8c939b', 0.5));
+  p.ellipse(0.80, 0.830, 0.132, 0.112, '#0b0c0e');
+  p.ellipse(0.80, 0.830, 0.072, 0.060, darken(palette.rim, 0.25));
 
-  // Rider, face down and sliding just behind the bike.
-  p.roundRect(0.50, 0.775, 0.24, 0.095, 0.04, palette.riderJacket);
-  p.rect(0.50, 0.775, 0.24, 0.018, lighten(palette.riderJacket, 0.18));
-  p.roundRect(0.44, 0.80, 0.10, 0.06, 0.025, darken(palette.riderJacket, 0.4));
-  p.ellipse(0.755, 0.795, 0.055, 0.045, palette.riderHelmet);
-  p.rect(0.715, 0.79, 0.075, 0.014, darken(palette.riderHelmet, 0.5));
+  // Frame, engine, tank and seat as one long body between the wheels.
+  p.poly([
+    [0.24, 0.700], [0.78, 0.762], [0.80, 0.856], [0.26, 0.800],
+  ], palette.frame);
+  p.poly([
+    [0.24, 0.700], [0.78, 0.762], [0.78, 0.792], [0.24, 0.732],
+  ], lighten(palette.frame, 0.26));
+  // Tank, still the most recognisable part of the machine.
+  p.poly([
+    [0.36, 0.700], [0.62, 0.730], [0.62, 0.800], [0.36, 0.772],
+  ], palette.tank);
+  p.poly([
+    [0.36, 0.734], [0.62, 0.764], [0.62, 0.782], [0.36, 0.752],
+  ], palette.tankStripe);
+  // Engine hanging below, and the exhaust flung out behind.
+  p.poly([
+    [0.42, 0.790], [0.64, 0.816], [0.63, 0.862], [0.42, 0.838],
+  ], palette.engine);
+  p.roundRect(0.60, 0.868, 0.24, 0.042, 0.018, darken(palette.exhaust, 0.28));
+  // Bars pointing up at the sky — the clearest read that it is on its side.
+  p.line(0.22, 0.690, 0.10, 0.590, mix(palette.rim, '#8f959d', 0.4), 0.024);
+  p.line(0.22, 0.690, 0.30, 0.586, mix(palette.rim, '#8f959d', 0.4), 0.020);
+  p.circle(0.10, 0.586, 0.026, '#1c1e22');
+
+  // Rider, face down and sliding just behind the machine.
+  const jacket = jacketFor(palette);
+  p.poly([
+    [0.52, 0.616], [0.78, 0.640], [0.80, 0.720], [0.54, 0.700],
+  ], jacket);
+  p.poly([
+    [0.52, 0.616], [0.78, 0.640], [0.78, 0.664], [0.52, 0.642],
+  ], lighten(jacket, 0.24));
+  // Flung arm and a trailing leg.
+  p.line(0.56, 0.640, 0.40, 0.596, darken(jacket, 0.30), 0.052);
+  p.circle(0.385, 0.592, 0.030, '#16181b');
+  p.line(0.76, 0.700, 0.90, 0.760, darken(palette.riderJacket, 0.18), 0.056);
+  p.roundRect(0.882, 0.750, 0.084, 0.046, 0.018, '#16181b');
+  // Helmet, the brightest thing in the pile so the eye finds the rider.
+  const helmet = hiVis(palette.riderHelmet, 0.30);
+  p.ellipse(0.545, 0.626, 0.062, 0.058, darken(helmet, 0.5));
+  p.ellipse(0.545, 0.622, 0.054, 0.050, helmet);
+  p.ellipse(0.545, 0.628, 0.050, 0.021, darken(helmet, 0.55));
+  p.ellipse(0.528, 0.604, 0.022, 0.012, lighten(helmet, 0.45));
 
   // Dust off the tarmac, and sparks where metal is dragging.
-  p.scatter(16, 91, 0.16, 0.72, 0.66, 0.22, 0.024, [
+  p.scatter(18, 91, 0.14, 0.72, 0.72, 0.24, 0.026, [
     'rgba(196,186,168,0.55)', 'rgba(214,206,190,0.4)', 'rgba(160,152,140,0.45)',
   ]);
-  p.scatter(7, 47, 0.24, 0.80, 0.30, 0.10, 0.014, [
+  p.scatter(9, 47, 0.20, 0.83, 0.34, 0.10, 0.016, [
     'rgba(255,196,90,0.85)', 'rgba(255,150,60,0.7)',
   ]);
 };
@@ -244,8 +396,11 @@ const drawAutoRickshaw = (
   p.ellipse(0.5, 0.965, 0.40, 0.035, 'rgba(0,0,0,0.34)');
 
   // Rear axle: two wheels, wide track.
-  drawWheel(p, 0.20, 0.86, 0.115, palette, false, 0.5);
-  drawWheel(p, 0.80, 0.86, 0.115, palette, false, 0.5);
+  for (const cx of [0.20, 0.80]) {
+    p.ellipse(cx, 0.86, 0.115, 0.112, '#0d0e11');
+    p.ellipse(cx, 0.86, 0.070, 0.068, darken(palette.rim, 0.3));
+    p.ellipse(cx, 0.86, 0.030, 0.029, mix(palette.rim, '#8c939b', 0.5));
+  }
 
   // Body tub.
   p.roundRect(0.16, 0.55, 0.68, 0.32, 0.06, livery.body);
@@ -308,6 +463,8 @@ export const paintBike = (
   const half = prop.width * 0.5;
   const spoked = spec.class === 'classic' || spec.class === 'twostroke' || spec.class === 'commuter';
   const twin = spec.voice.firingOrder === 2;
+  const wheelR = prop.wheel;
+  const wheelY = WHEEL_Y;
 
   p.save();
   // Lean is a rotation about the contact patch plus a lateral shift; rotation
@@ -316,122 +473,168 @@ export const paintBike = (
   p.translate(lean * 0.020, 0);
 
   // Contact shadow, tight under the tyre.
-  p.ellipse(0.5, 0.945, half * 1.25, 0.028, 'rgba(0,0,0,0.38)');
+  p.ellipse(0.5, 0.975, wheelR * 1.5, 0.026, 'rgba(0,0,0,0.42)');
 
-  // Rear wheel, tucked up into the body rather than dangling below it.
-  const wheelR = prop.wheel;
-  const wheelY = 0.90 - wheelR * 0.35;
-  drawWheel(p, 0.5, wheelY, wheelR, palette, spoked, 0.6);
+  // The rear wheel is drawn separately by the renderer so it can spin. Rivals
+  // and parked bikes get a static one baked in — they are small on screen and a
+  // per-entity rotation is not worth the draw call.
+  if (!options.bodyOnly) {
+    p.ellipse(0.5, wheelY, wheelR, wheelR, '#0a0b0d');
+    p.ellipse(0.5, wheelY, wheelR * 0.94, wheelR * 0.94, '#191b1f');
+    p.ellipse(0.5, wheelY, wheelR * 0.62, wheelR * 0.62, darken(palette.rim, 0.32));
+    p.ellipse(0.5, wheelY, wheelR * 0.54, wheelR * 0.54, '#15171a');
+    for (let i = 0; i < (spoked ? 10 : 5); i++) {
+      const a = (i / (spoked ? 10 : 5)) * Math.PI * 2;
+      p.line(0.5, wheelY, 0.5 + Math.cos(a) * wheelR * 0.56, wheelY + Math.sin(a) * wheelR * 0.56,
+        spoked ? lighten(palette.rim, 0.2) : palette.rim, spoked ? 0.012 : 0.06);
+    }
+    p.ellipse(0.5, wheelY, wheelR * 0.22, wheelR * 0.22, mix(palette.rim, '#8c939b', 0.5));
+  }
 
-  // Swingarm running forward from the axle.
-  p.rect(0.5 - half * 0.62, wheelY - 0.02, half * 1.24, 0.035, darken(palette.frame, 0.1));
+  // Swingarm: two arms straddling the tyre, running forward from the axle.
+  for (const side of [-1, 1] as const) {
+    p.roundRect(0.5 + side * (wheelR + 0.030) - 0.024, wheelY - 0.055, 0.048, 0.075, 0.016,
+      darken(palette.frame, 0.05));
+    p.rect(0.5 + side * (wheelR + 0.030) - 0.020, wheelY - 0.052, 0.016, 0.062,
+      lighten(palette.frame, 0.30));
+  }
+
+  // Rear mudguard: a band curving over the top of the tyre. This is the piece
+  // that ties the machine to the wheel — without it the body floats above a
+  // loose black circle.
+  const guard = darken(palette.frame, 0.02);
+  arcBand(p, 0.5, wheelY, wheelR * 1.00, wheelR * 1.22, Math.PI * 1.06, Math.PI * 1.94, guard);
+  arcBand(p, 0.5, wheelY, wheelR * 1.14, wheelR * 1.22, Math.PI * 1.20, Math.PI * 1.55,
+    lighten(palette.frame, 0.34));
 
   // Exhaust: twin pipes on the parallel twins, one fat can otherwise, both
-  // sitting alongside the wheel where they actually live.
+  // running back alongside the tyre where they actually live.
   const pipeY = wheelY - 0.075;
-  if (twin) {
-    p.roundRect(0.5 - half * 1.02, pipeY, half * 0.44, 0.055, 0.022, palette.exhaust);
-    p.roundRect(0.5 + half * 0.58, pipeY, half * 0.44, 0.055, 0.022, palette.exhaust);
-    p.rect(0.5 - half * 1.02, pipeY + 0.036, half * 0.44, 0.019, darken(palette.exhaust, 0.35));
-    p.rect(0.5 + half * 0.58, pipeY + 0.036, half * 0.44, 0.019, darken(palette.exhaust, 0.35));
-  } else {
-    p.roundRect(0.5 + half * 0.38, pipeY, half * 0.68, 0.062, 0.026, palette.exhaust);
-    p.rect(0.5 + half * 0.38, pipeY + 0.042, half * 0.68, 0.020, darken(palette.exhaust, 0.35));
-  }
+  const pipeH = 0.050;
+  const drawPipe = (side: -1 | 1): void => {
+    const chrome = darken(palette.exhaust, 0.30);
+    const len = half * 0.66;
+    const x0 = 0.5 + side * (wheelR + 0.012) - (side < 0 ? len : 0);
+    p.roundRect(x0, pipeY, len, pipeH, 0.022, chrome);
+    p.rect(x0 + len * 0.06, pipeY + 0.005, len * 0.84, 0.010, lighten(palette.exhaust, 0.30));
+    p.rect(x0, pipeY + pipeH * 0.62, len, pipeH * 0.38, darken(palette.exhaust, 0.62));
+    // The open end, angled away from the viewer.
+    p.ellipse(x0 + (side < 0 ? 0.005 : len - 0.005), pipeY + pipeH * 0.5,
+      0.013, pipeH * 0.44, '#0e1013');
+  };
+  if (twin) { drawPipe(-1); drawPipe(1); } else { drawPipe(1); }
 
-  // Engine block, wider and more finned on the big singles, overlapping the wheel.
-  const engineW = half * (1.02 + prop.tank * 0.22);
-  const engineY = 0.66;
-  p.block(0.5 - engineW * 0.5, engineY, engineW, 0.115, palette.engine, darken(palette.engine, 0.3));
-  for (let i = 0; i < 5; i++) {
-    p.rect(0.5 - engineW * 0.46, engineY + 0.012 + i * 0.019, engineW * 0.92, 0.008,
-      darken(palette.engine, 0.42));
+  // Engine: only the cylinder shoulders show past the rider's legs on a rear
+  // view. Drawing the whole block put a grey slab in the middle of the sprite.
+  const engineW = half * (0.62 + prop.tank * 0.16);
+  const engineY = 0.470;
+  p.roundRect(0.5 - engineW * 0.5, engineY, engineW, 0.090, 0.020,
+    darken(palette.engine, 0.28));
+  for (let i = 0; i < 3; i++) {
+    p.rect(0.5 - engineW * 0.46, engineY + 0.014 + i * 0.022, engineW * 0.92, 0.007,
+      darken(palette.engine, 0.52));
   }
-  // Crankcase highlight and a cylinder head poking above the block.
-  p.rect(0.5 - engineW * 0.44, engineY + 0.006, engineW * 0.26, 0.088, lighten(palette.engine, 0.22));
-  p.roundRect(0.5 - engineW * 0.30, engineY - 0.048, engineW * 0.60, 0.055, 0.014,
-    darken(palette.engine, 0.12));
+  p.rect(0.5 - engineW * 0.44, engineY + 0.008, engineW * 0.18, 0.072,
+    lighten(palette.engine, 0.10));
 
-  // Rear shock and the top of the swingarm, visible between engine and seat.
+  // Rear shocks, angled in from the swingarm to the frame. Dark: chrome here
+  // competes with the wheel for attention and wins, which is the wrong read.
   for (const side of [-1, 1] as const) {
-    p.rect(0.5 + side * half * 0.52 - half * 0.045, 0.60, half * 0.09, 0.115,
-      mix(palette.rim, '#5c6169', 0.4));
-    p.rect(0.5 + side * half * 0.52 - half * 0.055, 0.598, half * 0.11, 0.030, palette.accent);
+    p.line(0.5 + side * (wheelR + 0.026), wheelY - 0.050, 0.5 + side * half * 0.70, 0.520,
+      darken(mix(palette.rim, '#4a4e55', 0.85), 0.30), 0.028);
+    p.line(0.5 + side * (wheelR + 0.030), wheelY - 0.056, 0.5 + side * half * 0.72, 0.526,
+      mix(palette.rim, '#6d737b', 0.7), 0.008);
   }
 
-  // Rear mudguard hugging the tyre — the piece that makes the back end read.
+  // Tail unit: seat base tapering down to where the mudguard picks it up.
+  const tailW = half * (0.72 + prop.tank * 0.10);
+  const tailTop = 0.470;
+  const tailBottom = wheelY - wheelR * 1.16;
   p.poly([
-    [0.5 - half * 0.50, 0.70],
-    [0.5 + half * 0.50, 0.70],
-    [0.5 + half * 0.44, wheelY - wheelR * 0.62],
-    [0.5 - half * 0.44, wheelY - wheelR * 0.62],
-  ], darken(palette.frame, 0.05));
-  p.rect(0.5 - half * 0.50, 0.70, half * 1.0, 0.012, lighten(palette.frame, 0.25));
-
-  // Tail unit: the piece that joins the seat down to the wheel.
-  const tailW = half * (0.86 + prop.tank * 0.14);
-  p.poly([
-    [0.5 - tailW * 0.5, 0.56], [0.5 + tailW * 0.5, 0.56],
-    [0.5 + tailW * 0.38, 0.70], [0.5 - tailW * 0.38, 0.70],
+    [0.5 - tailW * 0.5, tailTop], [0.5 + tailW * 0.5, tailTop],
+    [0.5 + tailW * 0.36, tailBottom], [0.5 - tailW * 0.36, tailBottom],
   ], palette.frame);
-  p.rect(0.5 - tailW * 0.5, 0.56, tailW, 0.016, lighten(palette.frame, 0.22));
-  // Shadow down the shaded flank, so the tail is a solid not a card.
+  p.rect(0.5 - tailW * 0.5, tailTop, tailW, 0.012, lighten(palette.frame, 0.30));
+  // Shaded flank, so the tail is a solid and not a card.
   p.poly([
-    [0.5 + tailW * 0.18, 0.56], [0.5 + tailW * 0.5, 0.56],
-    [0.5 + tailW * 0.38, 0.70], [0.5 + tailW * 0.14, 0.70],
-  ], darken(palette.frame, 0.35));
+    [0.5 + tailW * 0.16, tailTop], [0.5 + tailW * 0.5, tailTop],
+    [0.5 + tailW * 0.36, tailBottom], [0.5 + tailW * 0.12, tailBottom],
+  ], darken(palette.frame, 0.40));
 
   // Fairing / belly pan on the sport bikes.
   if (prop.fairing > 0.3) {
     p.poly([
-      [0.5 - half * 0.84, 0.60], [0.5 + half * 0.84, 0.60],
-      [0.5 + half * 0.58, 0.74], [0.5 - half * 0.58, 0.74],
+      [0.5 - half * 0.72, 0.470], [0.5 + half * 0.72, 0.470],
+      [0.5 + half * 0.46, 0.565], [0.5 - half * 0.46, 0.565],
     ], mix(palette.tank, palette.accent, 0.25));
   }
 
-  // Seat.
-  const seatW = half * (1.06 + prop.tank * 0.16);
-  p.roundRect(0.5 - seatW * 0.5, 0.485, seatW, 0.085, 0.032, palette.seat);
-  p.rect(0.5 - seatW * 0.5, 0.485, seatW, 0.015, lighten(palette.seat, 0.22));
+  // Rear lamp, sitting on the tail where it meets the mudguard. Drawn before
+  // the rider so the glow never washes over the jacket.
+  const lampY = tailBottom - 0.042;
+  p.roundRect(0.5 - tailW * 0.24, lampY, tailW * 0.48, 0.030, 0.011,
+    withAlpha('#e03a2f', 0.44 + options.lamp * 0.56));
+  if (options.lamp > 0.5) {
+    p.ellipse(0.5, lampY + 0.015, tailW * 0.54, 0.034, withAlpha('#ff5a44', 0.34));
+  }
+  // Number plate, hanging off the guard. Small — it is a detail, not a sign.
+  p.rect(0.5 - tailW * 0.30, tailBottom + 0.008, tailW * 0.60, 0.030, '#cfd0ce');
+  p.text('KA 01', 0.5, tailBottom + 0.030, 0.020, '#15171b');
 
-  // Tank shoulders, visible either side of the rider.
-  const tankW = half * (1.10 + prop.tank * 0.28);
-  const tankY = 0.395;
-  p.roundRect(0.5 - tankW * 0.5, tankY, tankW, 0.105, 0.042, palette.tank);
+  // Seat.
+  const seatW = half * (0.94 + prop.tank * 0.12);
+  p.roundRect(0.5 - seatW * 0.5, 0.424, seatW, 0.066, 0.026, palette.seat);
+  p.rect(0.5 - seatW * 0.5, 0.424, seatW, 0.012, lighten(palette.seat, 0.28));
+
+  // Tank shoulders. Deliberately wider than the rider so a band of the
+  // machine's own colour shows either side of the jacket — without it the
+  // bike's identity disappears behind the person sitting on it.
+  const tankW = half * (1.34 + prop.tank * 0.30);
+  const tankY = 0.336;
+  p.roundRect(0.5 - tankW * 0.5, tankY, tankW, 0.100, 0.042, palette.tank);
   // Top surface catching the sky, and a shaded right flank: two tones turn a
   // flat rectangle into a fuel tank.
-  p.roundRect(0.5 - tankW * 0.5, tankY, tankW, 0.030, 0.02, lighten(palette.tank, 0.30));
+  p.roundRect(0.5 - tankW * 0.5, tankY, tankW, 0.028, 0.018, lighten(palette.tank, 0.34));
   p.poly([
-    [0.5 + tankW * 0.22, tankY + 0.012], [0.5 + tankW * 0.5, tankY + 0.012],
-    [0.5 + tankW * 0.46, tankY + 0.105], [0.5 + tankW * 0.20, tankY + 0.105],
-  ], darken(palette.tank, 0.30));
+    [0.5 + tankW * 0.24, tankY + 0.010], [0.5 + tankW * 0.5, tankY + 0.010],
+    [0.5 + tankW * 0.46, tankY + 0.100], [0.5 + tankW * 0.22, tankY + 0.100],
+  ], darken(palette.tank, 0.36));
   // The stripe. On the RD350 and the Enfields this is most of the personality.
-  p.rect(0.5 - tankW * 0.5, tankY + 0.046, tankW, 0.018, palette.tankStripe);
-  // Filler cap.
-  p.ellipse(0.5, tankY + 0.016, tankW * 0.10, 0.011, mix(palette.rim, '#8f959d', 0.5));
+  p.rect(0.5 - tankW * 0.5, tankY + 0.046, tankW, 0.017, palette.tankStripe);
+  p.ellipse(0.5, tankY + 0.014, tankW * 0.08, 0.010, mix(palette.rim, '#8f959d', 0.5));
 
   drawRider(p, palette, prop, options);
 
-  // Handlebars and mirrors, poking out past the rider's shoulders.
-  const barY = 0.335;
-  const barSpan = half * (spec.class === 'sport' ? 0.94 : 1.18);
-  p.line(0.5 - barSpan, barY, 0.5 + barSpan, barY, darken(palette.rim, 0.25), 0.020);
+  // Handlebars: risers, a proper bar, grips, levers and mirrors. On a rear
+  // three-quarter view this is the widest thing on the machine, so a flat rod
+  // here is most of why the bike reads as a smudge.
+  const barY = 0.325;
+  const barSpan = half * (spec.class === 'sport' ? 0.86 : 1.05);
+  const barMetal = mix(palette.rim, '#9aa1ab', 0.35);
+  // Top yoke and risers rising out of it.
+  p.roundRect(0.5 - half * 0.30, barY + 0.020, half * 0.60, 0.030, 0.010, darken(palette.frame, 0.25));
   for (const side of [-1, 1] as const) {
-    p.line(0.5 + side * barSpan, barY, 0.5 + side * barSpan * 1.14, barY - 0.05, '#2a2d33', 0.013);
-    p.ellipse(0.5 + side * barSpan * 1.14, barY - 0.058, 0.030, 0.019,
-      mix('#8f96a0', palette.accent, 0.2));
+    p.line(0.5 + side * half * 0.20, barY + 0.030, 0.5 + side * half * 0.34, barY + 0.004,
+      darken(barMetal, 0.30), 0.020);
   }
-
-  // Rear lamp on the tail, brighter under braking.
-  p.rect(0.5 - tailW * 0.24, 0.585, tailW * 0.48, 0.030,
-    withAlpha('#e03a2f', 0.42 + options.lamp * 0.58));
-  if (options.lamp > 0.5) {
-    p.ellipse(0.5, 0.60, tailW * 0.55, 0.038, withAlpha('#ff5a44', 0.30));
+  // The bar itself, with a lit top edge so it reads as a tube.
+  p.line(0.5 - barSpan, barY, 0.5 + barSpan, barY, darken(barMetal, 0.45), 0.026);
+  p.line(0.5 - barSpan, barY - 0.006, 0.5 + barSpan, barY - 0.006, lighten(barMetal, 0.10), 0.010);
+  for (const side of [-1, 1] as const) {
+    const gx = 0.5 + side * barSpan;
+    // Grip.
+    p.roundRect(gx - (side < 0 ? half * 0.26 : 0), barY - 0.017, half * 0.26, 0.034, 0.014, '#1c1e22');
+    p.rect(gx - (side < 0 ? half * 0.24 : -half * 0.02), barY - 0.014, half * 0.20, 0.008, '#33363c');
+    // Brake / clutch lever, angled forward off the grip.
+    p.line(gx + side * half * 0.04, barY - 0.004, gx + side * half * 0.30, barY - 0.028,
+      lighten(barMetal, 0.22), 0.011);
+    // Mirror on its stalk.
+    p.line(gx + side * half * 0.06, barY - 0.010, gx + side * half * 0.20, barY - 0.062,
+      '#2a2d33', 0.013);
+    p.ellipse(gx + side * half * 0.22, barY - 0.070, 0.032, 0.021, darken(barMetal, 0.35));
+    p.ellipse(gx + side * half * 0.22, barY - 0.072, 0.027, 0.017,
+      mix('#9fa6b0', palette.accent, 0.18));
   }
-
-  // Number plate, hanging under the tail.
-  p.rect(0.5 - tailW * 0.30, 0.625, tailW * 0.60, 0.046, '#f0f0ee');
-  p.text('KA 01', 0.5, 0.648, 0.032, '#15171b');
 
   p.restore();
 };

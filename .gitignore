@@ -31,3 +31,6 @@ media/*.webm
 media/*.gif
 qa*/
 qa-circuits/
+
+qa-bike/
+qa-sprite/

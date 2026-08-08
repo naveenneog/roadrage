@@ -6,6 +6,8 @@ import { withAlpha } from './palette.ts';
 interface Particle {
   x: number; y: number; vx: number; vy: number;
   life: number; max: number; colour: string; size: number;
+  /** Smoke grows and fades; sparks shrink and fall. */
+  smoke?: boolean;
 }
 
 /** Cap on simultaneous particles, so a pile-up cannot tank the frame rate. */
@@ -55,6 +57,26 @@ export class Effects {
     }
   }
 
+  /**
+   * Exhaust smoke: drifts back and up, growing and thinning as it goes.
+   * Separate from impact sparks because it needs the opposite physics.
+   */
+  spawnSmoke(x: number, y: number, strength: number, colour: string): void {
+    if (!this.enabled.particles) return;
+    this.particles.push({
+      x: x + (Math.random() - 0.5) * 6,
+      y: y + (Math.random() - 0.5) * 4,
+      vx: (Math.random() - 0.5) * 26,
+      vy: 40 + Math.random() * 50,
+      life: 0,
+      max: 0.42 + Math.random() * 0.5 * strength,
+      colour,
+      size: 5 + Math.random() * 9 * strength,
+      smoke: true,
+    });
+    if (this.particles.length > MAX_PARTICLES) this.particles.shift();
+  }
+
   step(dt: number): void {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i] as Particle;
@@ -65,8 +87,15 @@ export class Effects {
       }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vy += 900 * dt;
-      p.vx *= 1 - dt * 1.6;
+      if (p.smoke) {
+        // Smoke rises against the slipstream, slows, and expands.
+        p.vy -= 30 * dt;
+        p.vx *= 1 - dt * 0.9;
+        p.size += 26 * dt;
+      } else {
+        p.vy += 900 * dt;
+        p.vx *= 1 - dt * 1.6;
+      }
     }
     if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 4);
   }
@@ -154,9 +183,19 @@ export class Effects {
   drawParticles(ctx: CanvasRenderingContext2D): void {
     for (const p of this.particles) {
       const t = 1 - p.life / p.max;
-      ctx.globalAlpha = t * t;
-      ctx.fillStyle = p.colour;
-      ctx.fillRect(p.x, p.y, p.size, p.size);
+      if (p.smoke) {
+        // Smoke fades in then out, and is drawn round rather than square.
+        const fade = Math.sin(Math.min(1, p.life / p.max) * Math.PI);
+        ctx.globalAlpha = fade * 0.5;
+        ctx.fillStyle = p.colour;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.globalAlpha = t * t;
+        ctx.fillStyle = p.colour;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      }
     }
     ctx.globalAlpha = 1;
   }

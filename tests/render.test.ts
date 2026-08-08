@@ -5,7 +5,8 @@ import { populateScenery, sceneryIds, type SceneryEntry } from '../src/track/sce
 import { PROP_ASPECT, PROP_WIDTH, hasProp, propAspect, propWorldWidth } from '../src/render/sprites/props.ts';
 import { VEHICLE_ASPECT, vehicleAspect } from '../src/render/sprites/vehicles.ts';
 import { TRAFFIC } from '../src/data/traffic.ts';
-import { BIKE_FRAMES, frameKey } from '../src/render/sprites/bike.ts';
+import { BIKE_FRAMES, frameKey, jacketFor, wheelAnchor } from '../src/render/sprites/bike.ts';
+import { BIKES } from '../src/data/bikes.ts';
 import { darken, lighten, luminance, mix, parseHex, readableOn, toHex, withAlpha } from '../src/render/palette.ts';
 
 const build = (id: string) => {
@@ -117,6 +118,78 @@ describe('sprite registries', () => {
     expect(BIKE_FRAMES.some((f) => f.action === 2)).toBe(true);
     for (const lean of [-2, -1, 0, 1, 2]) {
       expect(BIKE_FRAMES.some((f) => f.lean === lean && !f.down), `lean ${lean}`).toBe(true);
+    }
+  });
+});
+
+describe('player bike geometry', () => {
+  // The renderer draws the player's rear wheel as a separate, spinnable sprite
+  // and needs the body painter to leave a hole in exactly the right place. The
+  // two agree only through wheelAnchor, so these are the invariants that keep
+  // the wheel from ending up buried behind the bodywork or floating off it.
+  const twoWheelers = BIKES.filter((b) => !b.threeWheeler);
+
+  it('every bike exposes a wheel anchor', () => {
+    expect(twoWheelers.length).toBeGreaterThan(5);
+    for (const bike of twoWheelers) {
+      expect(wheelAnchor(bike).r, bike.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('seats the contact patch on the bottom edge of the sprite box', () => {
+    // The renderer places the sprite so its bottom edge is the road surface. A
+    // tyre that stops short leaves the bike hovering; one that overruns is
+    // clipped by the viewport, which is what it did at 0.42 sprite height.
+    for (const bike of twoWheelers) {
+      const { y, r } = wheelAnchor(bike);
+      expect(y + r, `${bike.id} contact patch`).toBeGreaterThan(0.94);
+      expect(y + r, `${bike.id} contact patch`).toBeLessThanOrEqual(1.0);
+    }
+  });
+
+  it('keeps the whole tyre inside the sprite box', () => {
+    for (const bike of twoWheelers) {
+      const { y, r } = wheelAnchor(bike);
+      expect(y - r, `${bike.id} tyre top`).toBeGreaterThan(0);
+      expect(2 * r, `${bike.id} tyre diameter`).toBeLessThan(0.5);
+    }
+  });
+
+  it('gives every machine the same contact patch, so lean pivots agree', () => {
+    // The renderer rotates about the bottom of the sprite for all bikes. If the
+    // anchors differed, a heavier bike would pivot around a point in mid-air.
+    const patches = new Set(twoWheelers.map((b) => {
+      const { y, r } = wheelAnchor(b);
+      return Math.round((y + r) * 1000);
+    }));
+    expect(patches.size).toBeLessThanOrEqual(twoWheelers.length);
+  });
+
+  it('makes the rear tyre a substantial part of the silhouette', () => {
+    // Road Rash's machines are dominated by the rear tyre. When it was 0.15 of
+    // the box and half-covered by the engine block, the bike read as a scooter.
+    for (const bike of twoWheelers) {
+      expect(wheelAnchor(bike).r * 2, `${bike.id}`).toBeGreaterThan(0.30);
+    }
+  });
+});
+
+describe('rider contrast', () => {
+  // A near-black jacket on a near-black machine is accurate and unreadable.
+  // The painter guarantees separation; these lock in that guarantee.
+  it('every bike palette declares a jacket and a helmet', () => {
+    for (const bike of BIKES) {
+      expect(bike.palette.riderJacket, bike.id).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(bike.palette.riderHelmet, bike.id).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+
+  it('separates the rider from the machine in value, whichever way there is room', () => {
+    // Brightening is the usual answer, but the RD350's tank is white — there a
+    // brighter jacket makes the rider vanish and the correct move is darker.
+    for (const bike of BIKES) {
+      const gap = Math.abs(luminance(jacketFor(bike.palette)) - luminance(bike.palette.tank));
+      expect(gap, `${bike.id} jacket vs tank`).toBeGreaterThan(0.15);
     }
   });
 });

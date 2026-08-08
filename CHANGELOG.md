@@ -2,6 +2,74 @@
 
 All notable changes to Road Rash Bharat. Newest first.
 
+## 0.4.0 — the machine you actually look at
+
+The player's bike is on screen for every second of every race and was the
+weakest thing in the game: a soft, static, low-contrast shape with no motion at
+all. This release rebuilds it.
+
+### Added
+
+- **The rear wheel is its own sprite and it spins.** Angular velocity comes from
+  road speed and tyre radius, so the rate always matches how fast you are going.
+  Sixteen tread blocks around the shoulder make the rotation visible; a wheel
+  with a smooth sidewall spins invisibly.
+- **Hero-resolution player frames.** The player's machine rasterises at 640 px
+  instead of the shared 288 px. It is drawn at roughly 450 px on screen, so the
+  old sprite was being upscaled — that alone accounted for most of the softness.
+- **Live animation instead of baked frames.** Lean is now a real rotation about
+  the contact patch rather than one of five pre-drawn poses, and the body rides
+  on a damped suspension that compresses over bumps, shivers at idle and bobs
+  with speed.
+- **Exhaust smoke.** Two-strokes haze constantly, four-strokes puff under load.
+  New `Effects.spawnSmoke` gives smoke the opposite physics to impact sparks —
+  it rises, expands and fades instead of falling and shrinking.
+- **`Painter.outline`**, a hard dilated contour stamped under the artwork. A
+  crisp dark edge is the reason classic sprite art stays readable against a busy
+  road, and a blurred halo alone was not doing it.
+- **`spritelab.html`**, a dev-only page that shows every bike frame at its true
+  size against a checkerboard. Not part of the shipped bundle. It is what
+  surfaced every defect below; the artwork had never been looked at in isolation.
+
+### Changed
+
+- **The machine was redrawn around the tyre.** Every part now has a fixed place
+  relative to the wheel: mudguard curving over it, swingarm straddling it, pipes
+  beside it, tail and lamp above it. Previously the body was a stack of
+  rectangles that happened to sit above a circle, and at hero size the wheel was
+  buried entirely behind the engine block.
+- **Riders are guaranteed to out-value their machine.** Several authored jackets
+  are near-black, which is accurate to the real thing and useless on screen. A
+  jacket below a quarter value is now pulled toward the bike's accent colour and
+  then raised to a brightness floor, so each machine keeps its character while
+  the rider always reads as a separate object.
+- **Bodies are narrower and taller.** Widths were cut by about a third; the
+  handlebars, not the bodywork, are now the widest thing on the bike.
+- Proper handlebars: yoke, risers, grips, levers and mirrors instead of a flat
+  rod. On a rear view this is the widest part of the machine.
+- Rider torso tapers from shoulder to waist with a belt, racing hump and spine
+  ridge; arms are stroked twice so they stay distinct limbs against the jacket.
+- Legs are dark trousers tucked to the tank with boots just outside the tyre, so
+  the wheel is never hidden and the sprite is not bottom-heavy.
+- Engine, number plate and tail lamp are much smaller. All three were competing
+  with the wheel for attention and winning.
+- The wreck sprite was redrawn for the new scale with explicit coordinates
+  instead of one large rotation of the upright bike.
+- Player sprite height 0.42 → 0.50 of the viewport, seated on the bottom edge so
+  the rear tyre is no longer clipped.
+
+### Fixed
+
+- `Painter.outline` filled the whole sprite box with its wash colour, drawing a
+  large black rectangle behind the player during every race. The stamped
+  silhouette is enough; the wash is gone.
+
+### Internal
+
+- Extracted `render/player-view.ts`. The player's machine owns real animation
+  state (wheel angle, suspension, exhaust timer) that has nothing to do with the
+  segment loop, and `renderer.ts` had gone over its line budget.
+
 ## 0.3.0 — painted skylines
 
 ### Added

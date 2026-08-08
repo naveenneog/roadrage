@@ -20,6 +20,10 @@ export const warmForRace = (
   traffic: readonly TrafficSpec[],
   livery?: { body: string; roof: string },
 ): void => {
+  // The player's machine gets hero-resolution frames plus its own spinnable
+  // wheel; everyone else shares the smaller combined sprite.
+  renderer.setPlayerLivery(livery);
+  renderer.atlas.warmHero(playerBike, livery);
   renderer.atlas.warmBike(playerBike, livery);
   // Rivals share bike types often, and the atlas is keyed by id, so duplicates
   // cost a map lookup rather than a redraw.
