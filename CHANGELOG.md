@@ -2,6 +2,31 @@
 
 All notable changes to Road Rash Bharat. Newest first.
 
+## 0.3.0 — painted skylines
+
+### Added
+
+- **Painted far skylines**, generated once with Azure OpenAI `gpt-image-2` and
+  shipped as five WebP files totalling 247 KB: Bengaluru cantonment at dawn,
+  Marine Drive at night, a monsoon Western Ghats ridge, a Goan coast at dusk,
+  and Old Delhi at night. They replace the procedural sky and skyline; the near
+  tree line still draws on top.
+  - The split is deliberate. A skyline is one wide image drawn once and
+    scrolled — exactly what a text-to-image model is good at. Bikes and riders
+    are the opposite, needing dozens of exact lean and action frames on a
+    transparent background with a fixed pivot, so those stay procedural.
+  - Tiles are mirrored alternately, because a generated image is not seamless
+    and flipping every other copy makes the join match exactly for free.
+  - Entirely optional: if the files are missing or fail to load, the procedural
+    background draws instead.
+- `npm run assets` generates them, authenticating with the signed-in Azure CLI
+  identity rather than an API key, so no secret is written to disk or committed.
+
+### Fixed
+
+- Near props were the most transparent things on screen, because the fade-in
+  band was long and the props nearest the cull are the largest. Shortened.
+
 ## 0.2.0 — richer world, oncoming traffic, gameplay footage
 
 Driven by studying the original: Louis Gorenfeld's Road Rash analysis (the

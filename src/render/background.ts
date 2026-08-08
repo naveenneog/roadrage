@@ -14,10 +14,44 @@ export class Background {
   private far: HTMLCanvasElement | null = null;
   private near: HTMLCanvasElement | null = null;
   private builtFor = '';
+  /** Optional painted backdrop replacing the procedural sky and skyline. */
+  private backdrop: HTMLImageElement | null = null;
+  private backdropSrc = '';
+  /** Fraction of the backdrop's height at which its ground line sits. */
+  private backdropHorizon = 0.92;
 
   skyOffset = 0;
   farOffset = 0;
   nearOffset = 0;
+
+  /**
+   * Load a painted backdrop for this circuit.
+   *
+   * These are generated once, offline, and shipped as small WebP files. They
+   * replace the procedural sky and skyline only — the near tree line still
+   * draws on top, and the game runs perfectly without them if the load fails,
+   * which keeps the whole thing an enhancement rather than a dependency.
+   */
+  setBackdrop(src: string | null, horizon = 0.92): void {
+    if (!src) {
+      this.backdrop = null;
+      this.backdropSrc = '';
+      return;
+    }
+    if (src === this.backdropSrc) return;
+    this.backdropSrc = src;
+    this.backdropHorizon = horizon;
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => {
+      // Ignore a load that finished after the circuit already changed.
+      if (this.backdropSrc === src) this.backdrop = image;
+    };
+    image.onerror = () => {
+      if (this.backdropSrc === src) this.backdrop = null;
+    };
+    image.src = src;
+  }
 
   /** Rebuild the layers for a circuit. Cheap enough to call on every race start. */
   build(palette: SkyPalette, timeOfDay: TimeOfDay, city: string, width: number, height: number): void {
@@ -170,17 +204,71 @@ export class Background {
     this.nearOffset = (this.nearOffset + drift * 0.30) % 1;
   }
 
-  /** Draw all three layers. `horizon` is the screen y of the road's vanishing point. */
+  /** Draw all layers. `horizon` is the screen y of the road's vanishing point. */
   draw(ctx: CanvasRenderingContext2D, width: number, height: number, horizon: number): void {
-    if (!this.sky || !this.far || !this.near) return;
+    if (this.backdrop) {
+      this.drawBackdrop(ctx, width, height, horizon);
+    } else {
+      if (!this.sky || !this.far) return;
+      const lift = clamp(horizon / height, 0.15, 0.85);
+      const skyHeight = height * (lift + 0.12);
+      ctx.drawImage(this.sky, 0, 0, this.sky.width, this.sky.height, 0, 0, width, skyHeight);
+      this.drawWrapped(ctx, this.far, this.farOffset, width, skyHeight, height);
+    }
+    if (this.near) {
+      const lift = clamp(horizon / height, 0.15, 0.85);
+      this.drawWrapped(ctx, this.near, this.nearOffset, width, height * (lift + 0.12), height);
+    }
+  }
 
-    // The sky fills everything above the road; the horizon moves with the hills.
-    const lift = clamp(horizon / height, 0.15, 0.85);
-    const skyHeight = height * (lift + 0.12);
-    ctx.drawImage(this.sky, 0, 0, this.sky.width, this.sky.height, 0, 0, width, skyHeight);
+  /**
+   * Paint the backdrop so its ground line lands on the road's vanishing point.
+   *
+   * Tiles are mirrored alternately rather than repeated: a generated image is
+   * not seamless, and flipping every other copy makes the join match exactly at
+   * both edges for free.
+   */
+  private drawBackdrop(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    horizon: number,
+  ): void {
+    const image = this.backdrop;
+    if (!image || !image.width) return;
 
-    this.drawWrapped(ctx, this.far, this.farOffset, width, skyHeight, height);
-    this.drawWrapped(ctx, this.near, this.nearOffset, width, skyHeight, height);
+    // Scale so the image is at least as wide as the viewport, and tall enough
+    // that its ground line sits on the horizon with sky filling everything above.
+    const drawH = Math.max(horizon / this.backdropHorizon, height * 0.62);
+    const drawW = Math.max(drawH * (image.width / image.height), width * 0.6);
+    const top = horizon - drawH * this.backdropHorizon;
+
+    // Fill any sky above the image with its own top-row colour rather than
+    // leaving a gap on very wide viewports.
+    if (top > 0) {
+      ctx.drawImage(image, 0, 0, image.width, 1, 0, 0, width, top + 1);
+    }
+
+    const shift = ((this.farOffset % 1) + 1) % 1;
+    const startIndex = Math.floor(-shift);
+    let index = startIndex;
+    let x = (startIndex - shift) * drawW;
+
+    ctx.save();
+    while (x < width) {
+      if (((index % 2) + 2) % 2 === 0) {
+        ctx.drawImage(image, x, top, drawW, drawH);
+      } else {
+        // Mirrored copy: translate to the tile's right edge and flip.
+        ctx.translate(x + drawW, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(image, 0, top, drawW, drawH);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      }
+      x += drawW;
+      index++;
+    }
+    ctx.restore();
   }
 
   private drawWrapped(

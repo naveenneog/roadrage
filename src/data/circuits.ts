@@ -213,6 +213,8 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 6,
     purse: 18000,
     entryFee: 0,
+    backdrop: 'skyline-bengaluru',
+    backdropHorizon: 0.93,
     blurb: 'Six in the morning, before the market wakes. Two kilometres of colonial facade and flower stalls, and lanes that pinch to nothing.',
     note: 'Commercial Street runs ~1.3 km at 6–8 m between shopfronts; Russell Market (1927) is Indo-Saracenic with a clock tower; St Mary\u2019s Basilica (1882) opens the street into sudden space.',
     script: [
@@ -261,6 +263,8 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 4,
     purse: 24000,
     entryFee: 2000,
+    backdrop: 'skyline-bengaluru',
+    backdropHorizon: 0.93,
     blurb: 'Flat, fast and forgiving. Three laps of the lake with the whole of Thane watching from the promenade.',
     note: 'Masunda (Talao Pali) lake sits at ~10–15 m elevation in central Thane; the promenade loop is roughly 2 km around.',
     script: [
@@ -302,6 +306,8 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 3,
     purse: 40000,
     entryFee: 6000,
+    backdrop: 'skyline-mumbai-night',
+    backdropHorizon: 0.86,
     blurb: 'Six lanes, no traffic police, and a rock-cut Shiva temple sitting in the middle of the road since the eighth century.',
     note: 'SB Road is a wide modern commercial corridor (ICC Tower, Pune University gate) where informal night racing culture is well documented; Pataleshwar is a rock-cut cave temple set back from JM Road.',
     script: [
@@ -384,6 +390,8 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 3,
     purse: 88000,
     entryFee: 15000,
+    backdrop: 'skyline-mumbai-night',
+    backdropHorizon: 0.86,
     blurb: 'Three kilometres of unbroken curve, an Art Deco wall on your right and the Arabian Sea on your left. Nothing in India is faster.',
     note: 'Marine Drive is a 3.6 km C-shaped boulevard along Backbay reclamation; the streetlights along it are the "Queen\u2019s Necklace". The Art Deco ensemble facing it is UNESCO-listed.',
     script: [
@@ -425,6 +433,8 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 14,
     purse: 120000,
     entryFee: 22000,
+    backdrop: 'skyline-ghat-monsoon',
+    backdropHorizon: 0.88,
     blurb: 'A hundred and fifty metres of climb in three kilometres, under a closed forest canopy, in the rain. No guardrail.',
     note: 'Yeoor Hills road climbs roughly 100–150 m over 3–4 km on a narrow two-lane with switchbacks, inside the Sanjay Gandhi National Park ecosystem.',
     script: [
@@ -468,6 +478,8 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 22,
     purse: 210000,
     entryFee: 40000,
+    backdrop: 'skyline-ghat-monsoon',
+    backdropHorizon: 0.88,
     blurb: 'Waterfalls that land on the road. Fog you can lose a lorry in. One lap, because nobody has ever wanted two.',
     note: 'Malshej Ghat sits at roughly 700 m in the Western Ghats on NH-61, known for monsoon fog, roadside waterfalls that spill directly onto the carriageway, and unguarded hairpins.',
     script: [
@@ -512,6 +524,8 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 4,
     purse: 74000,
     entryFee: 12000,
+    backdrop: 'skyline-goa-dusk',
+    backdropHorizon: 0.9,
     blurb: 'Palms, laterite, and a sun going down into the Arabian Sea at exactly the wrong angle for your visor.',
     note: 'NH-66 runs the length of coastal Goa; the Siolim–Anjuna–Vagator stretch is narrow two-lane through coconut groves and laterite cuttings.',
     script: [
@@ -551,6 +565,8 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 9,
     purse: 165000,
     entryFee: 30000,
+    backdrop: 'skyline-delhi-night',
+    backdropHorizon: 0.9,
     blurb: 'Lanes narrower than the bike is long, cable overhead thick enough to walk on, and absolutely nowhere to put a mistake.',
     note: 'Chandni Chowk runs from Lal Qila to Fatehpuri Masjid; the surrounding katras and galis such as Dariba Kalan are famously only a few metres wide.',
     script: [

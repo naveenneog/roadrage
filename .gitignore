@@ -29,6 +29,5 @@ Thumbs.db
 media/*.mp4
 media/*.webm
 media/*.gif
-qa2/
-qa3/
+qa*/
 qa-circuits/

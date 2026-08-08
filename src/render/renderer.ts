@@ -33,8 +33,10 @@ const CAMERA_HEIGHT = 1100;
 const BASE_FOV = 96;
 /** Segments nearer than this (in world units) draw no scenery. */
 const SCENERY_NEAR_Z = 4200;
-/** Scenery fades in across this band so nothing pops into existence. */
-const SCENERY_FADE_Z = 1400;
+/** Scenery fades in across this band so nothing pops into existence. Kept short:
+ *  the props nearest the cull are the largest on screen, and a long fade makes
+ *  exactly those the most transparent, which is backwards. */
+const SCENERY_FADE_Z = 500;
 /** Below this on-screen width a prop is a smudge; skipping it is free frames. */
 const MIN_PROP_PIXELS = 5;
 /** The player's bike as a fraction of screen height; entities are clamped to it. */
@@ -96,6 +98,10 @@ export class Renderer {
   /** Rebuild the background and grade layers when the circuit changes. */
   prepare(circuit: CircuitSpec, road: Road): void {
     this.background.build(circuit.sky, circuit.timeOfDay, circuit.city, this.width, this.height);
+    this.background.setBackdrop(
+      circuit.backdrop ? `${import.meta.env.BASE_URL}generated/${circuit.backdrop}.webp` : null,
+      circuit.backdropHorizon ?? 0.92,
+    );
     this.fogColour = mix(circuit.surface.fog, circuit.sky.haze, 0.68);
     this.effects.buildGrade(circuit, this.width, this.height);
     this.effects.clear();
@@ -328,7 +334,7 @@ export class Renderer {
     // Props stay largely opaque. Fading them with distance makes them
     // *transparent* — you see the sky through a building — where what distance
     // should do is make them hazy. That is the atmosphere pass's job.
-    ctx.globalAlpha = (0.78 + 0.22 * segment.fog) * nearFade;
+    ctx.globalAlpha = (0.86 + 0.14 * segment.fog) * nearFade;
     ctx.drawImage(sprite.canvas, destX, destY, destW, destH);
     ctx.globalAlpha = 1;
   }

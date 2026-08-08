@@ -54,11 +54,8 @@ export const attachPresentation = (
 
   on('weapon:pickup', ({ weapon }) => hooks.hud.toast(weapon.toUpperCase(), 'good'));
 
-    // The police indicator is already persistent at the top of the screen, so a
-    // toast saying the same word is just the HUD shouting twice.
-    on('cop:spotted', ({ level }) => {
-      if (level === 1) hooks.hud.toast('POLICE', 'bad');
-    });
+  // The police indicator is persistent at the top of the screen, so a toast
+  // saying the same word is just the HUD shouting twice.
 
   on('story:beat', ({ speaker, line, durationMs }) =>
     hooks.hud.say(speaker, line, durationMs));

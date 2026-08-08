@@ -29,7 +29,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
+        // The painted backdrops are ~250 KB in total; worth precaching so the
+        // game looks the same offline as it does online.
+        maximumFileSizeToCacheInBytes: 3_000_000,
       },
     }),
   ],

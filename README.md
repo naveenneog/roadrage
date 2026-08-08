@@ -136,14 +136,35 @@ self-contradictory remount condition that stranded riders permanently, shunt and
 traffic collisions re-firing 120 times a second, a starting grid placed behind
 the finish line, and rider health that never regenerated.
 
-### Every sprite is drawn in code
+### Every sprite is drawn in code — plus painted backdrops
 
 Thirteen bikes built from their real proportions and painted from their real
 liveries; thirty-nine roadside props including a banyan with aerial roots, a
 chai tapri with a Brooke Bond board, Russell Market's clock tower, St Mary's
-Basilica, and an Ashok Leyland tailboard reading HORN OK PLEASE; nine traffic
-vehicles; five skies. All rasterised once into offscreen canvases at load, then
-blitted — which is why 200 sprites on screen still holds 60 fps.
+Basilica, and an Ashok Leyland tailboard reading HORN OK PLEASE; ten traffic
+vehicles in both rear and front views; five skies. All rasterised once into
+offscreen canvases at load, then blitted — which is why 200 sprites on screen
+still holds 60 fps.
+
+The one exception is the **far skyline**, which is a painted backdrop generated
+once with Azure OpenAI `gpt-image-2` and shipped as five WebP files totalling
+247 KB. That split is deliberate: a skyline is a single wide image drawn once
+and scrolled, which is exactly what a text-to-image model is good at. Bikes and
+riders are not — they need dozens of exact lean and action frames on a
+transparent background with a fixed pivot, which no prompt will hold consistent.
+
+Backdrops are an enhancement, never a dependency: if the files are missing or
+fail to load, the procedural sky and skyline draw instead and the game is
+unchanged. Regenerate with:
+
+```bash
+az login                       # any identity with Cognitive Services access
+npm run assets                 # writes public/generated/*.png
+npm run assets:compress        # → WebP, ~50 KB each
+```
+
+Nothing secret is stored: the generator takes a bearer token from the Azure CLI
+at run time. Endpoint and deployment are in `scripts/gen-assets.mjs`.
 
 ### The engines are synthesised, not sampled
 

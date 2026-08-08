@@ -141,6 +141,13 @@ export interface CircuitSpec {  id: string;
   /** Prize money for first place. */
   purse: number;
   entryFee: number;
+  /**
+   * Optional painted backdrop, generated once and shipped as a small WebP.
+   * Replaces the procedural sky and skyline; the game runs without it.
+   */
+  backdrop?: string;
+  /** Fraction of the backdrop's height at which its ground line sits. */
+  backdropHorizon?: number;
   /** Authored road script. */
   script: unknown[];
   blurb: string;
