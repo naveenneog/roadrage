@@ -207,8 +207,8 @@ const drawRider = (
   const helmet = hiVis(palette.riderHelmet, 0.30);
   const shadow = darken(jacket, 0.42);
   const lit = lighten(jacket, 0.26);
-  const halfBody = prop.width * 0.26;
-  const torsoTop = 0.155 + prop.fairing * 0.03 - (prop.stance - 0.56) * 0.10;
+  const halfBody = prop.width * 0.30;
+  const torsoTop = 0.170 + prop.fairing * 0.03 - (prop.stance - 0.56) * 0.10;
   const torsoBottom = 0.425;
   // Weight shifts across the seat with the lean, and the shoulders counter-lean
   // slightly — that offset is what makes a turn read as a rider, not a decal.
@@ -272,6 +272,22 @@ const drawRider = (
     lighten(jacket, 0.14));
   p.roundRect(tx - halfBody * (options.lean >= 0 ? 0.94 : 0.30), torsoTop + 0.014,
     halfBody * 0.62, 0.062, 0.026, lit);
+  // Racing panels: a light block over each shoulder running down the outside
+  // of the arm. Real leathers are blocked in high contrast precisely so a rider
+  // reads at distance, and it is the cheapest legibility win on the sprite.
+  const panel = lighten(jacket, 0.52);
+  const stripe = mix(palette.accent, '#e8e9ec', 0.35);
+  for (const side of [-1, 1] as const) {
+    p.poly([
+      [tx + side * halfBody * 0.36, torsoTop + 0.008],
+      [tx + side * halfBody * 0.92, shoulderY - 0.004],
+      [tx + side * halfBody * 0.86, shoulderY + 0.070],
+      [tx + side * halfBody * 0.34, shoulderY + 0.040],
+    ], panel);
+    p.line(tx + side * halfBody * 0.60, torsoTop + 0.020,
+      tx + side * halfBody * 0.58, shoulderY + 0.052, stripe, 0.016);
+  }
+
   // Racing hump behind the helmet — the silhouette cue that says leathers.
   p.ellipse(tx, torsoTop + 0.018, halfBody * 0.46, 0.030, lit);
   // Belt, dark, where the jacket meets the trousers. Two shapes instead of one
@@ -296,10 +312,12 @@ const drawRider = (
     // A cocked arm pulls back past the torso; a striking arm extends past it.
     const reach = striking ? (swing === 2 ? 0.34 : 0.27)
       : swinging ? halfBody * 0.34
-      : halfBody * 1.20;
+      : halfBody * 1.02;
+    // Hands sit well below the shoulders on a real bike — the arms run down
+    // and forward to the bars, they do not stick out sideways.
     const drop = striking ? (swing === 2 ? 0.10 : 0.0)
       : swinging ? -0.035
-      : 0.11;
+      : 0.150;
     const shoulderX = tx + side * halfBody * 0.82;
     const handX = 0.5 + side * reach + (swinging ? 0 : shift * 0.4);
     // Upper arm then forearm, with a bend at the elbow. The cocked arm bends
@@ -322,9 +340,9 @@ const drawRider = (
 
   // Helmet: shell, visor band, rim light and a highlight. Round, not a disc —
   // a wide flat ellipse here is what made the rider read as a floating blob.
-  const headY = torsoTop - 0.062;
+  const headY = torsoTop - 0.044;
   const hx = tx + counter * 0.6;
-  const hr = halfBody * 0.62;
+  const hr = halfBody * 0.50;
   p.ellipse(hx, headY, hr * 1.06, hr * 1.02, darken(helmet, 0.55));
   p.ellipse(hx, headY - 0.004, hr, hr * 0.96, helmet);
   // Visor aperture wrapping round the back of the shell.
@@ -381,7 +399,9 @@ const drawWreck = (p: Painter, palette: BikePalette, stage: 0 | 1 | 2 | 3): void
   p.line(0.22, 0.690, 0.30, 0.586, mix(palette.rim, '#8f959d', 0.4), 0.020);
   p.circle(0.10, 0.586, 0.026, '#1c1e22');
 
-  drawFallenRider(p, palette, stage);
+  // The rider is deliberately NOT drawn here. He gets his own sprite so the
+  // renderer can throw him clear of the machine and run him back; baked into
+  // this box he could never travel further than the bike is wide.
 
   // Dust off the tarmac, and sparks where metal is dragging. Both die away as
   // the rider gets up: a wreck still throwing sparks four seconds later is a
@@ -397,8 +417,24 @@ const drawWreck = (p: Painter, palette: BikePalette, stage: 0 | 1 | 2 | 3): void
   }
 };
 
-/** The rider, through the four beats of coming off and getting back on. */
-const drawFallenRider = (p: Painter, palette: BikePalette, stage: 0 | 1 | 2 | 3): void => {
+/**
+ * The rider on foot, as his own sprite, through the four beats of a spill:
+ * tumbling, sprawled, up on one knee, running back.
+ *
+ * Separate from the wreck because he has to travel. Baked into the bike's box
+ * he could never end up further from the machine than the machine is wide,
+ * which made the whole sequence read as one twitching pile. The renderer owns
+ * where he is; this only owns what he looks like.
+ *
+ * Drawn centred on x = 0.5 with the ground at y = 0.88, so the renderer can
+ * place him by his feet without a per-stage fudge.
+ */
+export const paintFallenRider = (
+  p: Painter,
+  spec: BikeSpec,
+  stage: 0 | 1 | 2 | 3,
+): void => {
+  const palette = spec.palette;
   const jacket = jacketFor(palette);
   const helmet = hiVis(palette.riderHelmet, 0.30);
   const trouser = darken(palette.riderJacket, 0.18);
@@ -411,82 +447,76 @@ const drawFallenRider = (p: Painter, palette: BikePalette, stage: 0 | 1 | 2 | 3)
     p.ellipse(cx - r * 0.34, cy - r * 0.40, r * 0.36, r * 0.20, lighten(helmet, 0.45));
   };
 
-  // The rider has to end up somewhere other than on top of his own bike, or the
-  // whole sequence reads as one twitching pile. He is thrown clear to the right,
-  // lands there, gets up there, and runs back left toward the machine.
-  const THROW = [0.10, 0.20, 0.18, 0.06][stage] as number;
-  const LIFT = [-0.02, 0.02, 0.0, -0.03][stage] as number;
-  p.save();
-  p.translate(THROW, LIFT);
-
   if (stage === 0) {
-    // Tumbling: still airborne, limbs everywhere, well clear of the machine.
+    // Tumbling: airborne, folded up, limbs out. No ground shadow — he is in
+    // the air, and a shadow pinned under him is what kills that read.
     p.save();
-    p.rotate(-0.9, 0.66, 0.56);
-    p.roundRect(0.60, 0.500, 0.20, 0.095, 0.040, jacket);
-    p.rect(0.60, 0.500, 0.20, 0.020, lighten(jacket, 0.24));
-    p.line(0.62, 0.520, 0.50, 0.452, darken(jacket, 0.30), 0.050);
-    p.line(0.78, 0.540, 0.90, 0.470, darken(jacket, 0.30), 0.050);
-    p.line(0.66, 0.594, 0.58, 0.690, trouser, 0.060);
-    p.line(0.76, 0.594, 0.86, 0.678, trouser, 0.060);
+    p.rotate(-1.15, 0.5, 0.55);
+    p.roundRect(0.40, 0.44, 0.22, 0.20, 0.070, jacket);
+    p.rect(0.40, 0.44, 0.22, 0.045, lighten(jacket, 0.24));
+    p.line(0.44, 0.48, 0.24, 0.34, darken(jacket, 0.30), 0.075);
+    p.line(0.60, 0.52, 0.80, 0.38, darken(jacket, 0.30), 0.075);
+    p.line(0.46, 0.63, 0.32, 0.84, trouser, 0.085);
+    p.line(0.58, 0.63, 0.74, 0.82, trouser, 0.085);
+    p.circle(0.30, 0.855, 0.045, '#16181b');
+    p.circle(0.765, 0.835, 0.045, '#16181b');
     p.restore();
-    head(0.665, 0.470, 0.052);
-    p.restore();
+    head(0.50, 0.30, 0.088);
     return;
   }
 
   if (stage === 1) {
-    // Sprawled face down, sliding, arms trailing behind.
+    // Sprawled face down on the tarmac, sliding, arms trailing.
+    p.ellipse(0.50, 0.885, 0.34, 0.035, 'rgba(0,0,0,0.34)');
     p.poly([
-      [0.52, 0.616], [0.78, 0.640], [0.80, 0.720], [0.54, 0.700],
+      [0.34, 0.700], [0.72, 0.730], [0.74, 0.845], [0.36, 0.820],
     ], jacket);
     p.poly([
-      [0.52, 0.616], [0.78, 0.640], [0.78, 0.664], [0.52, 0.642],
+      [0.34, 0.700], [0.72, 0.730], [0.72, 0.766], [0.34, 0.738],
     ], lighten(jacket, 0.24));
-    p.line(0.56, 0.640, 0.40, 0.596, darken(jacket, 0.30), 0.052);
-    p.circle(0.385, 0.592, 0.030, '#16181b');
-    p.line(0.76, 0.700, 0.90, 0.760, trouser, 0.056);
-    p.roundRect(0.882, 0.750, 0.084, 0.046, 0.018, '#16181b');
-    head(0.545, 0.622, 0.056);
-    p.restore();
+    p.line(0.40, 0.730, 0.16, 0.670, darken(jacket, 0.30), 0.070);
+    p.circle(0.145, 0.664, 0.042, '#16181b');
+    p.line(0.70, 0.820, 0.90, 0.878, trouser, 0.075);
+    p.roundRect(0.870, 0.858, 0.100, 0.052, 0.020, '#16181b');
+    head(0.375, 0.706, 0.082);
     return;
   }
 
   if (stage === 2) {
-    // Up on one knee, hand on the tarmac, about to push off.
-    p.line(0.74, 0.640, 0.72, 0.760, jacket, 0.086);
-    p.rect(0.700, 0.628, 0.084, 0.026, lighten(jacket, 0.24));
+    // Up on one knee, hand braced on the road, about to push off.
+    p.ellipse(0.50, 0.885, 0.28, 0.032, 'rgba(0,0,0,0.34)');
+    p.line(0.54, 0.500, 0.51, 0.700, jacket, 0.125);
+    p.rect(0.470, 0.482, 0.125, 0.038, lighten(jacket, 0.24));
     // Front leg planted, back leg still folded under.
-    p.line(0.72, 0.740, 0.80, 0.860, trouser, 0.062);
-    p.line(0.72, 0.756, 0.63, 0.856, darken(trouser, 0.24), 0.058);
-    p.roundRect(0.770, 0.852, 0.078, 0.040, 0.016, '#16181b');
-    p.roundRect(0.588, 0.848, 0.074, 0.038, 0.016, '#16181b');
-    // Arm braced on the road.
-    p.line(0.740, 0.664, 0.640, 0.780, darken(jacket, 0.26), 0.048);
-    p.circle(0.634, 0.786, 0.026, '#16181b');
-    head(0.752, 0.596, 0.056);
-    p.restore();
+    p.line(0.51, 0.680, 0.63, 0.860, trouser, 0.085);
+    p.line(0.51, 0.700, 0.36, 0.858, darken(trouser, 0.24), 0.080);
+    p.roundRect(0.585, 0.848, 0.105, 0.050, 0.020, '#16181b');
+    p.roundRect(0.300, 0.846, 0.100, 0.048, 0.020, '#16181b');
+    // Arm braced on the tarmac.
+    p.line(0.535, 0.545, 0.395, 0.735, darken(jacket, 0.26), 0.065);
+    p.circle(0.388, 0.748, 0.040, '#16181b');
+    head(0.556, 0.432, 0.086);
     return;
   }
 
-  // Running back to the machine: leaning forward, legs scissored, arms pumping.
+  // Running back to the machine: leaning into it, legs scissored, arms pumping.
+  p.ellipse(0.50, 0.885, 0.24, 0.030, 'rgba(0,0,0,0.30)');
   p.save();
-  p.rotate(-0.16, 0.62, 0.86);
-  p.line(0.620, 0.560, 0.616, 0.700, jacket, 0.090);
-  p.rect(0.578, 0.548, 0.084, 0.026, lighten(jacket, 0.24));
+  p.rotate(-0.20, 0.50, 0.88);
+  p.line(0.510, 0.430, 0.500, 0.660, jacket, 0.130);
+  p.rect(0.443, 0.412, 0.130, 0.040, lighten(jacket, 0.24));
   // Legs mid-stride.
-  p.line(0.616, 0.690, 0.548, 0.820, trouser, 0.062);
-  p.line(0.616, 0.690, 0.694, 0.800, darken(trouser, 0.22), 0.062);
-  p.roundRect(0.508, 0.812, 0.078, 0.040, 0.016, '#16181b');
-  p.roundRect(0.664, 0.792, 0.078, 0.040, 0.016, '#16181b');
+  p.line(0.500, 0.645, 0.375, 0.845, trouser, 0.085);
+  p.line(0.500, 0.645, 0.640, 0.805, darken(trouser, 0.22), 0.085);
+  p.roundRect(0.320, 0.832, 0.105, 0.050, 0.020, '#16181b');
+  p.roundRect(0.600, 0.792, 0.105, 0.050, 0.020, '#16181b');
   // Arms.
-  p.line(0.620, 0.590, 0.540, 0.640, darken(jacket, 0.26), 0.046);
-  p.line(0.620, 0.590, 0.706, 0.618, darken(jacket, 0.20), 0.046);
-  p.circle(0.534, 0.646, 0.024, '#16181b');
-  p.circle(0.712, 0.622, 0.024, '#16181b');
+  p.line(0.510, 0.490, 0.370, 0.575, darken(jacket, 0.26), 0.062);
+  p.line(0.510, 0.490, 0.655, 0.530, darken(jacket, 0.20), 0.062);
+  p.circle(0.362, 0.585, 0.036, '#16181b');
+  p.circle(0.665, 0.522, 0.036, '#16181b');
   p.restore();
-  head(0.606, 0.516, 0.058);
-  p.restore();
+  head(0.472, 0.352, 0.090);
 };
 
 /** The three-wheeler gets its own body: a cab, a canopy and a very different stance. */
@@ -683,6 +713,12 @@ export const paintBike = (
     withAlpha('#e03a2f', 0.44 + options.lamp * 0.56));
   if (options.lamp > 0.5) {
     p.ellipse(0.5, lampY + 0.015, tailW * 0.54, 0.034, withAlpha('#ff5a44', 0.34));
+  }
+  // Indicators either side of the lamp. Small, but they are the detail that
+  // makes a tail read as a road-legal machine rather than a shape.
+  for (const side of [-1, 1] as const) {
+    p.ellipse(0.5 + side * tailW * 0.38, lampY + 0.014, tailW * 0.09, 0.013,
+      withAlpha('#e8952c', 0.85));
   }
   // Number plate, hanging off the guard. Small — it is a detail, not a sign.
   p.rect(0.5 - tailW * 0.30, tailBottom + 0.008, tailW * 0.60, 0.030, '#cfd0ce');

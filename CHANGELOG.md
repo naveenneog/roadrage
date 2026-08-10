@@ -2,6 +2,28 @@
 
 All notable changes to Road Rash Bharat. Newest first.
 
+## 0.7.0 — the rider comes off properly
+
+### Changed
+
+- **The fallen rider is his own sprite now.** He is thrown clear of the machine
+  on an arc, lands and slides, waits on the tarmac, then runs back and arrives
+  exactly as the bike is remounted. Previously he was baked into the wreck
+  sprite, which capped how far he could travel at roughly the width of the bike
+  and made the whole sequence read as one twitching pile. Rivals get the same
+  treatment, so a downed pack does not leave riderless bikes lying about.
+- **Rider proportions redrawn from photo reference.** Two rear-view photographs
+  made the same three points, and all three were wrong on the sprite:
+  - Shoulders are the widest part of the silhouette. They are now wider, and
+    carry high-contrast racing panels down the shoulder and outer arm — real
+    leathers are blocked in contrast precisely so a rider reads at distance,
+    and it is the cheapest legibility win available.
+  - Arms run **down and forward** to the bars, not out sideways. Hands now sit
+    well below shoulder height.
+  - The helmet is compact and sunk into the shoulders, with almost no neck.
+- Amber indicators either side of the tail lamp — small, but it is the detail
+  that makes a tail read as a road-legal machine rather than a shape.
+
 ## 0.6.0 — the street answers back
 
 ### Added

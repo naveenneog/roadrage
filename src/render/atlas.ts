@@ -1,6 +1,6 @@
 import type { BikeSpec } from '../data/types.ts';
 import { Painter } from './painter.ts';
-import { BIKE_FRAMES, frameKey, paintBike, paintBikeWheel, type BikeFrameOptions } from './sprites/bike.ts';
+import { BIKE_FRAMES, frameKey, paintBike, paintBikeWheel, paintFallenRider, type BikeFrameOptions } from './sprites/bike.ts';
 import { propAspect, propPainter } from './sprites/props.ts';
 import { vehicleAspect, vehiclePainter, setPlateRegion } from './sprites/vehicles.ts';
 import type { TrafficSpec } from '../data/types.ts';
@@ -108,15 +108,31 @@ export class SpriteAtlas {
     });
   }
 
+  /**
+   * The rider on foot after a spill, as his own sprite so the renderer can
+   * throw him clear of the machine and run him back to it.
+   */
+  fallenRider(spec: BikeSpec, stage: 0 | 1 | 2 | 3, hero = false): Sprite {
+    const w = Math.round((hero ? this.heroWidth : this.baseWidth) * 0.62);
+    const key = `rider:${spec.id}:${stage}:${w}`;
+    return this.make(key, w, w, (p) => {
+      paintFallenRider(p, spec, stage);
+      p.keyLight(0.18);
+      p.outline(p.ctx.canvas as HTMLCanvasElement, Math.max(2, Math.round(w * 0.012)));
+    });
+  }
+
   /** Pre-rasterise every frame for a bike so no allocation happens mid-race. */
   warmBike(spec: BikeSpec, livery?: { body: string; roof: string }, plate?: string): void {
     for (const frame of BIKE_FRAMES) this.bike(spec, { ...frame, plate }, livery);
+    for (const stage of [0, 1, 2, 3] as const) this.fallenRider(spec, stage);
   }
 
   /** Pre-rasterise the player's hero frames and wheel. */
   warmHero(spec: BikeSpec, livery?: { body: string; roof: string }, plate?: string): void {
     for (const frame of BIKE_FRAMES) this.heroBike(spec, { ...frame, plate }, livery);
     this.heroWheel(spec);
+    for (const stage of [0, 1, 2, 3] as const) this.fallenRider(spec, stage, true);
   }
 
   prop(id: string, variant: number): Sprite {

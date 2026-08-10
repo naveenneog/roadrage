@@ -12,7 +12,7 @@ import { Shouts } from './shouts.ts';
 import { Painter } from './painter.ts';
 import { mix, withAlpha } from './palette.ts';
 import { paintSegment } from './road-painter.ts';
-import { PLAYER_SPRITE_HEIGHT, PlayerView } from './player-view.ts';
+import { PLAYER_SPRITE_HEIGHT, PlayerView, riderThrow } from './player-view.ts';
 import { FrameChooser } from './frame-chooser.ts';
 import { propWorldWidth } from './sprites/props.ts';
 
@@ -418,7 +418,8 @@ export class Renderer {
   ): void {
     const at = this.projectEntity(road, racer.z, racer.x, racer.y, player);
     if (!at) return;
-    const sprite = this.atlas.bike(racer.bike, this.frames.frameFor(racer));
+    const frame = this.frames.frameFor(racer);
+    const sprite = this.atlas.bike(racer.bike, frame);
     // A rival alongside you should read about the same size as you do; without
     // the clamp, one on the grid two metres ahead fills a third of the screen.
     const natural = at.w * (racer.bike.threeWheeler ? 0.78 : 0.56);
@@ -427,6 +428,22 @@ export class Renderer {
     if (destW < 2) return;
     ctx.globalAlpha = at.fog;
     ctx.drawImage(sprite.canvas, at.x - destW / 2, at.y - destH, destW, destH);
+
+    // A downed rival's rider is his own sprite too, thrown clear the same way
+    // the player's is — otherwise the pack falls off and the bikes lie there
+    // unattended while the player's rider sprints about.
+    if (racer.isDown) {
+      const rider = this.atlas.fallenRider(racer.bike, frame.downStage ?? 0);
+      const off = riderThrow(racer.downProgress);
+      const side = racer.lean >= 0 ? 1 : -1;
+      const size = destH * 0.62;
+      ctx.drawImage(
+        rider.canvas,
+        at.x + side * off.x * destH - size / 2,
+        at.y + off.y * destH - size * 0.88,
+        size, size,
+      );
+    }
     ctx.globalAlpha = 1;
   }
 

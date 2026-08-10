@@ -16,6 +16,31 @@ export interface PlayerViewDeps {
 }
 
 /**
+ * Where the rider is, relative to his machine, after coming off it.
+ *
+ * Returns a lateral and vertical offset in multiples of the sprite height. He
+ * is flung out and up over the first beat, lands and slides, waits on the
+ * tarmac, then runs back so he arrives just as the bike is remounted. Baking
+ * this into the wreck sprite capped his travel at the width of the bike, which
+ * is why the whole sequence used to read as one twitching pile.
+ */
+export const riderThrow = (progress: number): { x: number; y: number } => {
+  const t = clamp(progress, 0, 1);
+  // Out: eased so he leaves fast and decelerates into the slide.
+  if (t < 0.30) {
+    const k = t / 0.30;
+    const eased = 1 - (1 - k) * (1 - k);
+    // Airborne arc on the way out.
+    return { x: eased * 0.62, y: -Math.sin(k * Math.PI) * 0.30 };
+  }
+  // Down, and staying there while he collects himself.
+  if (t < 0.68) return { x: 0.62, y: 0 };
+  // Back: runs in, arriving exactly as the remount happens.
+  const k = (t - 0.68) / 0.32;
+  return { x: 0.62 * (1 - k * k), y: 0 };
+};
+
+/**
  * Draws the player's machine, which is the only thing on screen the player
  * looks at for the whole race.
  *
@@ -87,7 +112,37 @@ export class PlayerView {
     ctx.drawImage(sprite.canvas, 0, 0, destW, destH);
     ctx.restore();
 
-    if (!player.isDown) this.spawnExhaust(player, baseX, baseY + destH * 0.86, destW, dt);
+    if (player.isDown) {
+      this.drawFallenRider(ctx, player, frame.downStage ?? 0, baseX, baseY + destH, destH);
+    } else {
+      this.spawnExhaust(player, baseX, baseY + destH * 0.86, destW, dt);
+    }
+  }
+
+  /**
+   * The rider on foot, thrown clear of the machine and running back to it.
+   *
+   * Drawn as a separate sprite at a live offset rather than baked into the
+   * wreck, which is the only way he can end up further from the bike than the
+   * bike is wide.
+   */
+  private drawFallenRider(
+    ctx: CanvasRenderingContext2D,
+    player: Racer,
+    stage: 0 | 1 | 2 | 3,
+    baseX: number,
+    groundY: number,
+    destH: number,
+  ): void {
+    const sprite = this.deps.atlas.fallenRider(player.bike, stage, true);
+    const throwOff = riderThrow(player.downProgress);
+    // He is thrown toward the outside of wherever the bike was leaning.
+    const side = player.lean >= 0 ? 1 : -1;
+    const size = destH * 0.62;
+    const x = baseX + side * throwOff.x * destH - size / 2;
+    // The sprite's ground line sits at 0.88 of its box.
+    const y = groundY + throwOff.y * destH - size * 0.88;
+    ctx.drawImage(sprite.canvas, x, y, size, size);
   }
 
   /** The rear wheel, spun by distance travelled so the rate always matches speed. */
