@@ -11,10 +11,8 @@ dist/
 dev-dist/
 *.tsbuildinfo
 
-# QA artifacts
-qa/
-qa-dist/
-qa-circuits/
+# QA artifacts — every harness writes to a qa-prefixed directory
+qa*/
 coverage/
 test-results/
 playwright-report/
@@ -29,8 +27,3 @@ Thumbs.db
 media/*.mp4
 media/*.webm
 media/*.gif
-qa*/
-qa-circuits/
-
-qa-bike/
-qa-sprite/
