@@ -62,6 +62,8 @@ export type GameEvents = {
   'attack:whiff': { kind: 'punch' | 'kick' | 'weapon'; pan: number; byPlayer: boolean };
   /** A swing the rider could not start, and why. */
   'attack:denied': { reason: 'winded' | 'busy'; byPlayer: boolean };
+  /** Another road user shouting at the player. */
+  'taunt': { text: string; gloss: string; pan: number; hostile: boolean };
   'rider:down': { racerId: number; byPlayer: boolean; pan: number };
   'bike:crash': { racerId: number; speed: number };
   'race:start': { circuitId: string; laps: number };

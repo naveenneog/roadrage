@@ -332,6 +332,7 @@ const finishStep = (racer: Racer, road: Road, previousZ: number, result: StepRes
 export const knockDown = (racer: Racer, seconds: number): void => {
   if (racer.isDown || racer.invuln > 0) return;
   racer.downTimer = seconds;
+  racer.downTotal = seconds;
   racer.stagger = 0;
   racer.attack = null;
   racer.riderHealth = clamp(racer.riderHealth - 12, 0, 100);

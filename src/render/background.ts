@@ -13,6 +13,8 @@ export class Background {
   private sky: HTMLCanvasElement | null = null;
   private far: HTMLCanvasElement | null = null;
   private near: HTMLCanvasElement | null = null;
+  /** Local monuments, drawn over whichever skyline is in use. */
+  private landmarks: HTMLCanvasElement | null = null;
   private builtFor = '';
   /** Optional painted backdrop replacing the procedural sky and skyline. */
   private backdrop: HTMLImageElement | null = null;
@@ -65,6 +67,8 @@ export class Background {
 
     this.sky = this.layer(w, h, (p) => this.paintSky(p, palette, timeOfDay));
     this.far = this.layer(w * 2, h, (p) => this.paintFar(p, palette, timeOfDay, city));
+    this.landmarks = this.layer(w * 2, h,
+      (p) => this.paintLandmarks(p, palette.skyline, timeOfDay, city));
     this.near = this.layer(w * 2, h, (p) => this.paintNear(p, palette, timeOfDay, city));
   }
 
@@ -157,6 +161,128 @@ export class Background {
           0.05, 0.004, withAlpha('#ffffff', 0.18));
       }
     }
+
+    // Landmarks last, so they sit in front of the generic tower run.
+    this.paintLandmarks(p, colour, timeOfDay, city);
+  }
+
+  /**
+   * Landmarks the locals would actually recognise.
+   *
+   * Drawn as flat silhouettes into the far layer, on top of the generic tower
+   * run. Proportion matters more than detail at this distance: the Vidhana
+   * Soudha reads because it is a long low block with a stepped central dome,
+   * and CST because of its one tall gabled clock tower. Anything finer than
+   * that is invisible by the time it is composited behind the haze.
+   */
+  private paintLandmarks(p: Painter, colour: string, timeOfDay: TimeOfDay, city: string): void {
+    // Higher than the generic skyline base: the horizon band is crowded with
+    // shopfronts, trees and traffic, and a monument sitting level with them is
+    // simply never seen. These need to clear the roofline.
+    const base = 0.68;
+    const lit = withAlpha('#ffd98a', timeOfDay === 'night' ? 0.5 : 0.16);
+    // Monuments read a shade lighter than the anonymous tower run behind them,
+    // which is both true of floodlit stone and the only way the silhouette
+    // separates from the skyline it sits against.
+    const stone = timeOfDay === 'night'
+      ? lighten(colour, 0.14)
+      : lighten(colour, 0.26);
+
+    /** A dome on a drum, the shape half of these buildings are built around. */
+    const dome = (cx: number, y: number, r: number, fill: string): void => {
+      p.ellipse(cx, y, r, r * 0.92, fill);
+      p.rect(cx - r, y, r * 2, r * 0.5, fill);
+      p.rect(cx - r * 0.045, y - r * 1.5, r * 0.09, r * 0.55, fill);
+    };
+
+    // Landmarks are landmarks because they are bigger than everything around
+    // them. Scaled about the skyline base so they stand proud of the towers.
+    //
+    // The x factor also halves, because this layer is authored two viewports
+    // wide so it can wrap seamlessly — without that, a monument written at
+    // x = 0.3 lands at 0.6 on screen and the set smears into one grey band.
+    p.save();
+    p.scale(0.30, 1.55, 0, base);
+
+    if (city === 'bengaluru') {
+      // Vidhana Soudha: a long neo-Dravidian block, stepped, with a central dome.
+      const y = base - 0.10;
+      p.rect(0.30, y, 0.30, 0.10, stone);
+      p.rect(0.335, y - 0.028, 0.23, 0.030, stone);
+      p.rect(0.385, y - 0.052, 0.13, 0.026, stone);
+      dome(0.45, y - 0.062, 0.036, stone);
+      // The corner turrets that make the roofline read as this building.
+      for (const x of [0.315, 0.375, 0.525, 0.585]) dome(x, y - 0.010, 0.016, stone);
+      if (timeOfDay === 'night') p.rect(0.30, y + 0.03, 0.30, 0.012, lit);
+
+      // Bangalore Palace: Tudor towers with crenellations, off to the left.
+      p.rect(0.10, base - 0.07, 0.12, 0.07, stone);
+      for (const x of [0.105, 0.175]) {
+        p.rect(x, base - 0.105, 0.032, 0.105, stone);
+        for (let i = 0; i < 3; i++) p.rect(x + i * 0.012, base - 0.117, 0.008, 0.014, stone);
+      }
+      // St Mary's Basilica spire, further right.
+      p.rect(0.70, base - 0.075, 0.020, 0.075, stone);
+      p.poly([[0.70, base - 0.075], [0.71, base - 0.135], [0.72, base - 0.075]], stone);
+    }
+
+    if (city === 'mumbai') {
+      // Chhatrapati Shivaji Terminus: one tall gabled clock tower on a long hall.
+      const y = base - 0.09;
+      p.rect(0.24, y, 0.26, 0.09, stone);
+      p.rect(0.335, y - 0.075, 0.05, 0.075, stone);
+      dome(0.36, y - 0.082, 0.032, stone);
+      for (const x of [0.255, 0.465]) dome(x, y - 0.012, 0.018, stone);
+      // Gateway of India: a squat arch on the water.
+      p.rect(0.62, base - 0.06, 0.10, 0.06, stone);
+      p.rect(0.655, base - 0.032, 0.03, 0.032, timeOfDay === 'night' ? '#0d1220' : darken(colour, 0.4));
+      for (const x of [0.625, 0.705]) dome(x, base - 0.070, 0.014, stone);
+      dome(0.67, base - 0.078, 0.020, stone);
+    }
+
+    if (city === 'thane' || city === 'pune') {
+      // No single silhouette defines these, so it is a temple gopuram and the
+      // mill chimneys — which is what the skyline actually looks like.
+      p.poly([
+        [0.32, base], [0.345, base - 0.085], [0.395, base - 0.085], [0.42, base],
+      ], stone);
+      p.rect(0.345, base - 0.098, 0.05, 0.014, stone);
+      for (const x of [0.60, 0.66]) {
+        p.rect(x, base - 0.11, 0.014, 0.11, stone);
+        p.rect(x - 0.004, base - 0.118, 0.022, 0.010, stone);
+      }
+    }
+
+    if (city === 'delhi') {
+      // Jama Masjid: three bulbous domes between two minarets.
+      const y = base - 0.055;
+      p.rect(0.30, y, 0.24, 0.055, stone);
+      dome(0.42, y - 0.030, 0.045, stone);
+      dome(0.355, y - 0.014, 0.026, stone);
+      dome(0.485, y - 0.014, 0.026, stone);
+      for (const x of [0.295, 0.545]) {
+        p.rect(x, base - 0.145, 0.016, 0.145, stone);
+        dome(x + 0.008, base - 0.152, 0.014, stone);
+      }
+      // Red Fort: a long crenellated wall with the Lahori Gate.
+      p.rect(0.62, base - 0.048, 0.26, 0.048, stone);
+      for (let i = 0; i < 13; i++) p.rect(0.62 + i * 0.02, base - 0.058, 0.010, 0.012, stone);
+      p.rect(0.71, base - 0.078, 0.055, 0.030, stone);
+      for (const x of [0.712, 0.748]) dome(x, base - 0.086, 0.013, stone);
+    }
+
+    if (city === 'goa') {
+      // Bom Jesus / Se Cathedral: a Portuguese baroque facade and a bell tower.
+      const y = base - 0.075;
+      p.rect(0.40, y, 0.14, 0.075, stone);
+      p.poly([[0.40, y], [0.47, y - 0.038], [0.54, y], [0.40, y]], stone);
+      p.rect(0.545, y - 0.030, 0.035, 0.105, stone);
+      p.rect(0.540, y - 0.042, 0.045, 0.014, stone);
+      p.rect(0.462, y - 0.062, 0.006, 0.026, stone);
+      p.rect(0.452, y - 0.054, 0.026, 0.006, stone);
+    }
+
+    p.restore();
   }
 
   /** Nearer silhouette: tree line, or the second rank of buildings. */
@@ -206,17 +332,22 @@ export class Background {
 
   /** Draw all layers. `horizon` is the screen y of the road's vanishing point. */
   draw(ctx: CanvasRenderingContext2D, width: number, height: number, horizon: number): void {
+    const lift = clamp(horizon / height, 0.15, 0.85);
     if (this.backdrop) {
       this.drawBackdrop(ctx, width, height, horizon);
     } else {
       if (!this.sky || !this.far) return;
-      const lift = clamp(horizon / height, 0.15, 0.85);
       const skyHeight = height * (lift + 0.12);
       ctx.drawImage(this.sky, 0, 0, this.sky.width, this.sky.height, 0, 0, width, skyHeight);
       this.drawWrapped(ctx, this.far, this.farOffset, width, skyHeight, height);
     }
+    // Landmarks sit in their own layer so they survive a painted backdrop. The
+    // generated skylines are generic city shapes; the point of these is that a
+    // local recognises exactly where they are, so they must always draw.
+    if (this.landmarks) {
+      this.drawWrapped(ctx, this.landmarks, this.farOffset, width, height * (lift + 0.12), height);
+    }
     if (this.near) {
-      const lift = clamp(horizon / height, 0.15, 0.85);
       this.drawWrapped(ctx, this.near, this.nearOffset, width, height * (lift + 0.12), height);
     }
   }

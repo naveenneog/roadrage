@@ -12,6 +12,7 @@ import {
 import { knockDown, stepRacer, type Controls, type StepResult } from './physics.ts';
 import { Racer } from './racer.ts';
 import { collideWithTraffic, Police, TrafficField } from './traffic.ts';
+import { pickTaunt } from '../data/taunts.ts';
 
 export type RacePhase = 'grid' | 'countdown' | 'racing' | 'finished' | 'busted' | 'wrecked';
 
@@ -69,6 +70,10 @@ export class Race {
   private readonly combatContext: CombatContext;
   private readonly policeEnabled: boolean;
   private finishOrder = 0;
+  /** Seconds until another road user is allowed to shout. */
+  private tauntCooldown = 0;
+  /** Whether the coarser tier of street abuse is permitted. */
+  strongLanguage = false;
 
   constructor(options: RaceOptions) {
     this.circuit = options.circuit;
@@ -210,6 +215,7 @@ export class Race {
     this.stepField(dt, controls);
     this.traffic.update(dt, this.player.z);
     this.resolveInteractions(dt);
+    this.checkNearMisses(dt);
     this.updateStandings();
     this.checkPolice(dt);
     this.checkEnding();
@@ -253,6 +259,52 @@ export class Race {
   }
 
   /** Swing toward whoever is actually beside you, rather than at empty air. */
+  /**
+   * Emit a shout from a nearby road user.
+   *
+   * Rate-limited hard: a busy junction can produce a collision on almost every
+   * frame, and six overlapping shouts is noise rather than character.
+   */
+  private shout(hostile: boolean): void {
+    if (this.tauntCooldown > 0) return;
+    this.tauntCooldown = hostile ? 1.6 : 3.4;
+    const seed = Math.floor(this.elapsed * 977 + this.player.z * 0.017);
+    const taunt = pickTaunt(this.circuit.city, this.strongLanguage, seed);
+    this.bus.emit('taunt', {
+      text: taunt.text,
+      gloss: taunt.gloss,
+      pan: clamp(this.player.x, -1, 1),
+      hostile,
+    });
+  }
+
+  /**
+   * Somebody you have just squeezed past at speed, without touching them.
+   *
+   * The near miss is the characteristic event of Indian traffic and it produced
+   * no reaction at all before this: you could thread a gap at 140 and the city
+   * stayed silent.
+   */
+  private checkNearMisses(dt: number): void {
+    if (this.tauntCooldown > 0) {
+      this.tauntCooldown -= dt;
+      return;
+    }
+    if (this.phase !== 'racing' || this.player.isDown) return;
+    if (this.player.speedPercent < 0.55) return;
+
+    for (const vehicle of this.traffic.vehicles) {
+      if (!vehicle.active) continue;
+      const dz = loopDelta(this.player.z, vehicle.z, this.road.length);
+      // Just gone past: behind the rider but still within earshot.
+      if (dz > -40 || dz < -420) continue;
+      const gap = Math.abs(vehicle.x - this.player.x) - vehicle.spec.width * 0.5;
+      if (gap > 0.30) continue;
+      this.shout(false);
+      return;
+    }
+  }
+
   private aimDirection(racer: Racer): number {
     let best = 0;
     let bestDistance = Infinity;
@@ -285,6 +337,8 @@ export class Race {
           this.hitstop = Math.max(this.hitstop, hit.power * 0.06);
           this.shake = Math.min(1, this.shake + hit.power * 0.8);
           if (this.policeEnabled) this.police.provoke(hit.power * 18);
+          // Whoever you just hit has something to say about it.
+          this.shout(true);
         }
         if (hit.knockedDown) {
           this.bus.emit('rider:down', { racerId: a.id, byPlayer: false, pan: clamp(a.x, -1, 1) });

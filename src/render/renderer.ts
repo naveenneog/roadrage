@@ -3,17 +3,17 @@ import { cameraDepthForFov, cameraPositionFor, fogFactor, project } from '../cor
 import type { CircuitSpec } from '../data/types.ts';
 import type { Race } from '../game/race.ts';
 import type { Racer } from '../game/racer.ts';
-import { attackPhase } from '../game/racer.ts';
 import type { TrafficVehicle } from '../game/traffic.ts';
 import { DEFAULT_ROAD_WIDTH, SEGMENT_LENGTH, type Road, type Segment } from '../track/road.ts';
 import { SpriteAtlas } from './atlas.ts';
 import { Background } from './background.ts';
 import { Effects } from './effects.ts';
+import { Shouts } from './shouts.ts';
 import { Painter } from './painter.ts';
 import { mix, withAlpha } from './palette.ts';
 import { paintSegment } from './road-painter.ts';
-import type { BikeFrameOptions } from './sprites/bike.ts';
 import { PLAYER_SPRITE_HEIGHT, PlayerView } from './player-view.ts';
+import { FrameChooser } from './frame-chooser.ts';
 import { propWorldWidth } from './sprites/props.ts';
 
 export interface RenderQuality {
@@ -58,6 +58,8 @@ export class Renderer {
   readonly atlas: SpriteAtlas;
   readonly background = new Background();
   readonly effects: Effects;
+  /** Speech from other road users, drawn over the world in screen space. */
+  readonly shouts = new Shouts();
   quality: RenderQuality = QUALITY.high;
 
   private width = 0;
@@ -70,6 +72,13 @@ export class Renderer {
   private fogColour = '#c9d4dc';
   /** Owns everything about how the player's own machine is drawn and animated. */
   private readonly playerView: PlayerView;
+  /** Picks which baked pose each rider is drawn in. */
+  private readonly frames = new FrameChooser();
+
+  /** Tell the renderer which region's plates the field is wearing. */
+  setPlate(plate: string, city: string): void {
+    this.frames.setRegion(plate, city);
+  }
 
   /** Tell the renderer which livery the player's machine wears. */
   setPlayerLivery(livery: { body: string; roof: string } | undefined): void {
@@ -132,6 +141,7 @@ export class Renderer {
     const speedPercent = player.speedPercent;
 
     this.effects.step(dt);
+    this.shouts.step(dt);
 
     // Widening the field of view with speed is the cheapest and strongest
     // sensation-of-speed trick there is.
@@ -169,7 +179,7 @@ export class Renderer {
     this.drawRoad(ctx, road, baseSegment, basePercent, player, cameraY, position, circuit);
     this.drawEntities(ctx, race, road, baseSegment, player);
     this.drawHaze(ctx, width, height, horizon, circuit);
-    this.playerView.draw(ctx, player, this.frameFor(player), width, height, dt);
+    this.playerView.draw(ctx, player, this.frames.frameFor(player), width, height, dt);
 
     ctx.restore();
 
@@ -177,6 +187,8 @@ export class Renderer {
     this.effects.drawGrade(ctx, width, height);
     this.effects.drawParticles(ctx);
     this.effects.drawFlash(ctx, width, height);
+    // Shouts last, over the grade and flash: they are meant to be read.
+    this.shouts.draw(ctx, width, height);
 
     if (showDebug) this.drawDebug(ctx, race);
   }
@@ -398,28 +410,6 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  private frameFor(racer: Racer): BikeFrameOptions {
-    const lean = clamp(Math.round(racer.lean * 2), -2, 2);
-    let action: 0 | 1 | 2 | 3 = 0;
-    let side: -1 | 1 = 1;
-    if (racer.attack) {
-      const phase = attackPhase(racer);
-      // Anticipation gets its own cocked-arm pose; the strike and the
-      // follow-through share the extended one.
-      action = phase === 'windup' ? 3 : racer.attack.kind === 'punch' ? 1 : 2;
-      side = racer.attack.direction >= 0 ? 1 : -1;
-    }
-    return {
-      // A rider mid-swing is still cornering. Zeroing the lean snapped the bike
-      // bolt upright the instant you pressed a button, which read as a glitch.
-      lean: racer.attack ? clamp(Math.round(racer.lean), -1, 1) : lean,
-      action,
-      actionSide: side,
-      down: racer.isDown,
-      lamp: racer.speed < racer.handling.maxSpeed * 0.4 ? 1 : 0,
-    };
-  }
-
   private drawRacer(
     ctx: CanvasRenderingContext2D,
     road: Road,
@@ -428,7 +418,7 @@ export class Renderer {
   ): void {
     const at = this.projectEntity(road, racer.z, racer.x, racer.y, player);
     if (!at) return;
-    const sprite = this.atlas.bike(racer.bike, this.frameFor(racer));
+    const sprite = this.atlas.bike(racer.bike, this.frames.frameFor(racer));
     // A rival alongside you should read about the same size as you do; without
     // the clamp, one on the grid two metres ahead fills a third of the screen.
     const natural = at.w * (racer.bike.threeWheeler ? 0.78 : 0.56);

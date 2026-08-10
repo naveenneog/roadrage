@@ -2,7 +2,7 @@ import type { BikeSpec } from '../data/types.ts';
 import { Painter } from './painter.ts';
 import { BIKE_FRAMES, frameKey, paintBike, paintBikeWheel, type BikeFrameOptions } from './sprites/bike.ts';
 import { propAspect, propPainter } from './sprites/props.ts';
-import { vehicleAspect, vehiclePainter } from './sprites/vehicles.ts';
+import { vehicleAspect, vehiclePainter, setPlateRegion } from './sprites/vehicles.ts';
 import type { TrafficSpec } from '../data/types.ts';
 
 export interface Sprite {
@@ -39,6 +39,18 @@ export class SpriteAtlas {
   constructor(quality: 'low' | 'medium' | 'high' = 'high') {
     this.baseWidth = quality === 'low' ? 128 : quality === 'medium' ? 192 : 288;
     this.heroWidth = quality === 'low' ? 320 : quality === 'medium' ? 448 : 640;
+  }
+
+  /**
+   * Which region's registration marks the traffic wears.
+   *
+   * Every cache key carries it, so switching circuits repaints the traffic
+   * rather than showing Bengaluru plates on a Delhi street.
+   */
+  private city = 'bengaluru';
+
+  setCity(city: string): void {
+    this.city = city;
   }
 
   private make(key: string, w: number, h: number, draw: (p: Painter) => void): Sprite {
@@ -97,13 +109,13 @@ export class SpriteAtlas {
   }
 
   /** Pre-rasterise every frame for a bike so no allocation happens mid-race. */
-  warmBike(spec: BikeSpec, livery?: { body: string; roof: string }): void {
-    for (const frame of BIKE_FRAMES) this.bike(spec, frame, livery);
+  warmBike(spec: BikeSpec, livery?: { body: string; roof: string }, plate?: string): void {
+    for (const frame of BIKE_FRAMES) this.bike(spec, { ...frame, plate }, livery);
   }
 
   /** Pre-rasterise the player's hero frames and wheel. */
-  warmHero(spec: BikeSpec, livery?: { body: string; roof: string }): void {
-    for (const frame of BIKE_FRAMES) this.heroBike(spec, frame, livery);
+  warmHero(spec: BikeSpec, livery?: { body: string; roof: string }, plate?: string): void {
+    for (const frame of BIKE_FRAMES) this.heroBike(spec, { ...frame, plate }, livery);
     this.heroWheel(spec);
   }
 
@@ -115,9 +127,10 @@ export class SpriteAtlas {
   }
 
   vehicle(spec: TrafficSpec, variant: number, oncoming = false): Sprite {
-    const key = `veh:${spec.id}:${variant}:${oncoming ? 'f' : 'r'}`;
+    const key = `veh:${spec.id}:${variant}:${oncoming ? 'f' : 'r'}:${this.city}`;
     const w = this.baseWidth;
     return this.make(key, w, w * vehicleAspect(spec.id), (p) => {
+      setPlateRegion(this.city);
       vehiclePainter(spec.id, oncoming)(p, spec, variant * 11 + 5);
       p.keyLight(0.16);
       p.haloBehind(p.ctx.canvas as HTMLCanvasElement, Math.max(3, w * 0.018), 0.42);

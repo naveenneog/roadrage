@@ -407,6 +407,10 @@ export class Screens {
       (v) => this.actions.updateSettings({ showFps: v })));
     panel.append(toggle('Reduce motion', save.settings.reducedMotion,
       (v) => this.actions.updateSettings({ reducedMotion: v })));
+    panel.append(toggle('Strong language', save.settings.strongLanguage,
+      (v) => this.actions.updateSettings({ strongLanguage: v })));
+    panel.append(toggle('Translate street talk', save.settings.tauntSubtitles,
+      (v) => this.actions.updateSettings({ tauntSubtitles: v })));
 
     const qualityRow = el('div', 'setting');
     const qLabel = el('label', undefined, 'Graphics');

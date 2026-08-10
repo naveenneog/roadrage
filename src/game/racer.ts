@@ -112,6 +112,8 @@ export class Racer {
   stagger = 0;
   /** Seconds remaining face-down on the road. */
   downTimer = 0;
+  /** How long this spell off the bike lasts, so progress through it is known. */
+  downTotal = 0;
   /** Post-remount grace, so you are not instantly re-downed by the pack. */
   invuln = 0;
   /** Debounce so one side-swipe is one event, not one per frame. */
@@ -161,6 +163,15 @@ export class Racer {
     return this.downTimer > 0;
   }
 
+  /**
+   * 0..1 through the time spent off the bike, so the renderer can play the
+   * tumble, the pick-up and the run back rather than freezing one pose.
+   */
+  get downProgress(): number {
+    if (this.downTotal <= 0 || this.downTimer <= 0) return 0;
+    return 1 - this.downTimer / this.downTotal;
+  }
+
   get isWrecked(): boolean {
     return this.bikeDamage >= 100 || this.riderHealth <= 0;
   }
@@ -197,6 +208,7 @@ export class Racer {
     this.attack = null;
     this.stagger = 0;
     this.downTimer = 0;
+    this.downTotal = 0;
     this.invuln = 0;
     this.shuntCooldown = 0;
     this.trafficCooldown = 0;

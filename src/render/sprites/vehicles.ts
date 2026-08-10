@@ -1,4 +1,5 @@
 import type { TrafficSpec } from '../../data/types.ts';
+import { shortPlate } from '../../data/plates.ts';
 import { Painter } from '../painter.ts';
 import { darken, lighten, withAlpha } from '../palette.ts';
 
@@ -24,9 +25,24 @@ const wheels = (p: Painter, y: number, r: number, left: number, right: number): 
   p.ellipse(right, y, r * 0.42, r * 0.38, '#8a9099');
 };
 
-const plate = (p: Painter, cx: number, y: number, w: number, label = 'MH 12'): void => {
+/**
+ * The registration mark stamped on traffic, and the city it belongs to.
+ *
+ * Held at module scope rather than threaded through every painter's signature:
+ * the painters are a dozen pure draw functions called synchronously from the
+ * atlas, and adding a parameter none of them wants to any of the others buys
+ * nothing. `SpriteAtlas` sets this immediately before rasterising and keys its
+ * cache on the same city, so a sprite can never be reused across regions.
+ */
+let plateCity = 'bengaluru';
+
+export const setPlateRegion = (city: string): void => {
+  plateCity = city;
+};
+
+const plate = (p: Painter, cx: number, y: number, w: number, variant = 0): void => {
   p.rect(cx - w / 2, y, w, w * 0.30, '#f0f0ee');
-  p.text(label, cx, y + w * 0.15, w * 0.24, '#15171b');
+  p.text(shortPlate(plateCity, variant), cx, y + w * 0.15, w * 0.24, '#15171b');
 };
 
 const autoRickshaw: VehiclePainter = (p, spec) => {

@@ -24,6 +24,10 @@ export interface SaveData {
     reducedMotion: boolean;
     quality: 'low' | 'medium' | 'high' | 'auto';
     showFps: boolean;
+    /** Allow the coarser tier of street abuse from other road users. */
+    strongLanguage: boolean;
+    /** Show a plain-English gloss under each shout. */
+    tauntSubtitles: boolean;
   };
 }
 
@@ -47,6 +51,10 @@ export const defaultSave = (): SaveData => ({
     reducedMotion: false,
     quality: 'auto',
     showFps: false,
+    // Off by default: the milder pool is the funnier one anyway, and nobody
+    // should be surprised by the coarse tier on a shared screen.
+    strongLanguage: false,
+    tauntSubtitles: true,
   },
 });
 

@@ -2,6 +2,47 @@
 
 All notable changes to Road Rash Bharat. Newest first.
 
+## 0.6.0 — the street answers back
+
+### Added
+
+- **Other road users shout at you.** Squeeze past a bus at speed or clip an auto
+  and you get told about it, in the local language: Kannada in Bengaluru,
+  Marathi in Thane, Mumbai and Pune, Hindi in Delhi, Konkani in Goa. This is the
+  loudest thing about an Indian street and the game was silent about it — you
+  could thread six lanes at 140 and nobody so much as looked up.
+  - Two tiers. The default pool is the exasperated, sarcastic register that most
+    of this actually is — *maneli helbittu bandidya?*, *bike na, rocket na?* —
+    and it is the funnier half. A coarser tier sits behind **Settings › Strong
+    language**, off by default, with the harshest words masked. Nobody meets it
+    by surprise on a shared screen.
+  - **Settings › Translate street talk** puts a plain-English gloss under each
+    line, on by default, so the joke lands whichever languages you speak.
+- **Region-correct number plates.** Machines and traffic now wear the local
+  registration: `KA` in Bengaluru, `MH 04` in Thane, `MH 01` in Mumbai, `MH 12`
+  in Pune, `DL` in Delhi, `GA` in Goa, with the real RTO district codes. Rivals
+  each get their own district, so a pack is not twelve identical plates. Every
+  sprite cache key carries the region, so plates cannot leak between circuits.
+- **Local monuments on the skyline.** Bengaluru gets the Vidhana Soudha's long
+  stepped block, Bangalore Palace's turrets and St Mary's spire; Mumbai gets
+  CST's clock tower and the Gateway; Delhi the Jama Masjid's three domes between
+  its minarets and the Red Fort's crenellated wall; Goa a Portuguese church
+  facade and bell tower. They draw in their own layer so they survive the
+  painted backdrops, which are generic city shapes.
+- **Coming off is now a sequence, not a freeze frame.** The rider tumbles clear
+  of the machine, sprawls and slides, gets up on one knee, then runs back to the
+  bike before remounting — four poses driven by how far through the spill you
+  are. Dust and sparks die away as he recovers.
+
+### Fixed
+
+- Talao Pali is in Thane but was drawing the Bengaluru skyline.
+
+### Internal
+
+- Extracted `render/frame-chooser.ts`. Deciding which pose a rider is in is
+  simulation-reading, not drawing, and `renderer.ts` had gone over budget again.
+
 ## 0.5.0 — the garage, and swings that read
 
 ### Added

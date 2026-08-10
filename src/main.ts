@@ -191,6 +191,10 @@ class Game {
       policeEnabled: !chapter,
     });
     this.race = race;
+    // Street talk follows the player's settings, not the circuit.
+    race.strongLanguage = this.save.settings.strongLanguage;
+    this.renderer.shouts.subtitles = this.save.settings.tauntSubtitles;
+    this.renderer.shouts.clear();
 
     // In the campaign the field are not racers, they are hunters: maximum
     // aggression, maximum violence, and they never let you settle.

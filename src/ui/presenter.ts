@@ -54,6 +54,11 @@ export const attachPresentation = (
 
   on('weapon:pickup', ({ weapon }) => hooks.hud.toast(weapon.toUpperCase(), 'good'));
 
+  // Other road users. `pan` is -1..1 across the road, so it maps onto the
+  // screen rather than always appearing in the middle.
+  on('taunt', ({ text, gloss, pan, hostile }) =>
+    hooks.renderer.shouts.add(text, gloss, 0.5 + pan * 0.28, hostile));
+
   // The police indicator is persistent at the top of the screen, so a toast
   // saying the same word is just the HUD shouting twice.
 

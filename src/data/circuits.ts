@@ -263,7 +263,7 @@ export const CIRCUITS: readonly CircuitSpec[] = [
     fogDensity: 4,
     purse: 24000,
     entryFee: 2000,
-    backdrop: 'skyline-bengaluru',
+    backdrop: 'skyline-mumbai-night',
     backdropHorizon: 0.93,
     blurb: 'Flat, fast and forgiving. Three laps of the lake with the whole of Thane watching from the promenade.',
     note: 'Masunda (Talao Pali) lake sits at ~10–15 m elevation in central Thane; the promenade loop is roughly 2 km around.',
