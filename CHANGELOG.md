@@ -2,6 +2,53 @@
 
 All notable changes to Road Rash Bharat. Newest first.
 
+## 0.5.0 — the garage, and swings that read
+
+### Added
+
+- **The garage is a lit stage.** One machine stands in a spotlight, rendered
+  from the same hero sprites the race uses, breathing gently with its rear wheel
+  idling. A rail of chips switches between machines and a spec panel carries the
+  numbers. Each bike tints its own stage with its accent colour, so the Duke's
+  orange and the Enfield's cream are not the same showroom.
+- **Swings have anticipation.** Attacks now run wind-up → strike → recovery
+  instead of holding one frozen pose for the whole swing. The wind-up gets its
+  own cocked-arm sprite; the strike extends past the bars. A swing with no
+  anticipation reads as a decal being switched on.
+- **Missing costs you something you can hear.** A swing that leaves its active
+  frames without touching anyone emits `attack:whiff` and an airy miss sound,
+  pitched well above the impacts so a miss is instantly distinguishable from a
+  hit. Previously a whiff was completely silent and invisible.
+- **Refused inputs answer back.** Swinging while winded or already committed
+  emits `attack:denied` and a short muted thud. It used to do nothing at all,
+  which is indistinguishable from a dropped input.
+- **`scripts/qa-ui.mjs`** — walks every screen at three viewports and fails on
+  clipped content, elements pushed out of reach, undersized touch targets and
+  **overlapping siblings**. `npm run qa:ui`.
+- `attack`, `attackKind` and `stamina` on the debug snapshot, so harnesses can
+  assert combat actually happens rather than trusting a screenshot.
+
+### Fixed
+
+- **Every card on the garage, circuits and campaign screens was broken.** Rows
+  were sized to 121 px while the content needed 250–290 px, so each card was
+  clipped and painted straight through the card below it. All twelve bikes, all
+  nine circuits and all six chapters.
+  - The cause is that a `<button>` will not size to its own content while it
+    *is* the grid item. Two attempted fixes made it worse in instructive ways:
+    `min-height: fit-content` made the buttons grow *past* their grid cells, so
+    clipping became overlap; moving the flex layout to an inner wrapper left the
+    button itself still refusing to grow. The fix is a plain block slot between
+    the grid and the button, which restores ordinary sizing.
+  - `qa-ui.mjs` fails the build if any of it comes back.
+- The bike no longer snaps bolt upright the instant you press an attack button.
+  Lean is preserved through the swing, at reduced amplitude.
+
+### Changed
+
+- Attack poses are driven by `attackPhase()`, derived from the same profile
+  timings combat resolves against, so what you see is what will connect.
+
 ## 0.4.0 — the machine you actually look at
 
 The player's bike is on screen for every second of every race and was the

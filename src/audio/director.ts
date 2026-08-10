@@ -71,6 +71,8 @@ export class AudioDirector {
       }
     });
 
+    on('attack:whiff', ({ kind, pan }) => this.sfx.whiff(kind !== 'punch', pan));
+    on('attack:denied', ({ byPlayer }) => { if (byPlayer) this.sfx.denied(0); });
     on('rider:down', ({ pan }) => this.sfx.spill(pan));
     on('bike:crash', () => this.sfx.crash(1, 0));
     on('horn', ({ kind, pan }) => this.sfx.horn(kind, pan));

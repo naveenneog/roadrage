@@ -185,6 +185,166 @@ button.ghost:hover:not(:disabled) {
   background: none;
 }
 
+/* ─────────────────────────── garage ─────────────────────────── */
+
+.garage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.garage-head .cash {
+  font-family: var(--mono);
+  font-size: 1rem;
+  color: var(--amber);
+  letter-spacing: 0.06em;
+}
+
+.garage-stage {
+  display: grid;
+  grid-template-columns: minmax(18rem, 27rem) minmax(16rem, 24rem);
+  gap: 1.4rem;
+  align-items: center;
+  width: min(58rem, 95vw);
+}
+
+/* The lit stage. The vignette sits behind the canvas so the machine appears to
+   stand in a pool of light rather than on a flat panel. */
+.spotlight {
+  position: relative;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 78% at 50% 4%, rgba(255, 236, 196, 0.10), rgba(0, 0, 0, 0) 62%),
+    linear-gradient(180deg, #0a0c11 0%, #111520 55%, #05070a 100%);
+  box-shadow: inset 0 0 0 1px rgba(242, 244, 247, 0.07);
+}
+
+.spotlight canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Spec panel scrolls on its own if a machine has a long note — it must never
+   push the stage or the rail off screen. */
+.garage-spec {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
+  text-align: left;
+  min-width: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.garage-spec .maker {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--amber);
+}
+
+.garage-spec .name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.garage-spec .meta {
+  font-size: 0.76rem;
+  color: rgba(242, 244, 247, 0.62);
+  font-family: var(--mono);
+}
+
+.garage-spec .blurb {
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: rgba(242, 244, 247, 0.78);
+  margin: 0;
+}
+
+.garage-spec .note {
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: rgba(242, 244, 247, 0.42);
+  margin: 0;
+}
+
+.garage-spec .bars { margin: 0.2rem 0; }
+
+.garage-spec button.primary {
+  margin-top: 0.3rem;
+  align-self: stretch;
+}
+
+.garage-spec button.locked { color: var(--red); }
+
+/* The machine rail. A horizontal strip of chips, so switching between bikes is
+   one click and the stage is always the thing you are looking at. */
+.garage-rail {
+  display: flex;
+  gap: 0.45rem;
+  width: min(58rem, 95vw);
+  overflow-x: auto;
+  padding: 0.3rem 0.15rem 0.5rem;
+  scrollbar-width: thin;
+}
+
+.garage-rail .chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  flex: 0 0 auto;
+  min-width: 8.4rem;
+  padding: 0.5rem 0.65rem;
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+  background: rgba(242, 244, 247, 0.045);
+  /* Same intrinsic-sizing fix as .card — a button will not grow to its flex
+     content while it is a flex item. */
+  min-height: fit-content;
+  height: auto;
+}
+
+.garage-rail .chip.viewing {
+  border-color: var(--amber);
+  background: rgba(240, 168, 40, 0.16);
+}
+
+.garage-rail .chip.owned .chip-tag { color: var(--amber); }
+
+.chip-maker {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(242, 244, 247, 0.5);
+}
+
+.chip-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.chip-price,
+.chip-tag {
+  font-size: 0.64rem;
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  color: rgba(242, 244, 247, 0.55);
+}
+
+@media (max-width: 860px) {
+  .garage-stage { grid-template-columns: 1fr; gap: 0.7rem; }
+  .garage-spec { max-height: none; }
+  .garage-spec .note { display: none; }
+}
+
 /* ─────────────────────────── lists ─────────────────────────── */
 
 .card-list {
@@ -197,17 +357,30 @@ button.ghost:hover:not(:disabled) {
   padding: 0.25rem;
 }
 
+.card-slot {
+  /* The grid/flex item. An ordinary block sizes to its content, which is the
+     one thing a <button> refuses to do in this position. */
+  display: block;
+  min-width: 0;
+}
+
 .card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  align-items: flex-start;
+  display: block;
+  width: 100%;
   text-align: left;
   text-transform: none;
   letter-spacing: normal;
   padding: 0.85rem 1rem;
   background: rgba(242, 244, 247, 0.045);
   position: relative;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-start;
+  width: 100%;
 }
 
 .card[aria-pressed="true"] {
@@ -428,4 +601,7 @@ kbd {
   .card-list { max-height: 52vh; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
   .card .note { display: none; }
   .screen { gap: 0.4rem; padding: 0.6rem; }
+  .garage-stage { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .garage-spec .note, .garage-spec .blurb { display: none; }
+  .garage-rail .chip { min-width: 7rem; padding: 0.35rem 0.5rem; }
 }

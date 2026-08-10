@@ -14,6 +14,8 @@ export interface AttackState {
   elapsed: number;
   /** True once this swing has already connected — one hit per swing. */
   resolved: boolean;
+  /** True once a miss has been reported, so it is only announced once. */
+  whiffed?: boolean;
 }
 
 export interface AttackProfile {
@@ -27,6 +29,36 @@ export interface AttackProfile {
   /** Lateral shove applied to the victim, in road half-widths per second. */
   shove: number;
 }
+
+/**
+ * Which part of a swing a rider is in.
+ *
+ * The renderer needs this because a single frozen pose held for the whole
+ * attack reads as a decal. Anticipation, strike and follow-through are what
+ * make a punch look like it was thrown by someone.
+ */
+export type AttackPhase = 'windup' | 'strike' | 'recover';
+
+export const attackPhase = (racer: Racer): AttackPhase | null => {
+  const swing = racer.attack;
+  if (!swing) return null;
+  const profile = ATTACKS[swing.kind];
+  if (swing.elapsed < profile.windup) return 'windup';
+  if (swing.elapsed <= profile.windup + profile.active) return 'strike';
+  return 'recover';
+};
+
+/** 0..1 progress through the current phase, for driving a smooth pose. */
+export const attackPhaseProgress = (racer: Racer): number => {
+  const swing = racer.attack;
+  if (!swing) return 0;
+  const p = ATTACKS[swing.kind];
+  const t = swing.elapsed;
+  if (t < p.windup) return p.windup > 0 ? t / p.windup : 1;
+  if (t <= p.windup + p.active) return p.active > 0 ? (t - p.windup) / p.active : 1;
+  const rec = p.recover;
+  return rec > 0 ? Math.min(1, (t - p.windup - p.active) / rec) : 1;
+};
 
 export const ATTACKS: Record<AttackKind, AttackProfile> = {
   // Fast, cheap, chips away — the jab you spam while jostling for a line.

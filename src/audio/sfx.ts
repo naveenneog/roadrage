@@ -135,6 +135,25 @@ export class Sfx {
     this.noiseBurst(input, 0.07, 'lowpass', 700, 1.0, (t) => Math.pow(1 - t, 3) * 0.5);
   }
 
+  /**
+   * A swing through empty air. Airy and pitched well above the impacts, so a
+   * miss is instantly distinguishable from a hit without looking at anything.
+   */
+  whiff(heavy: boolean, pan: number): void {
+    if (!this.allow('whiff', 0.05)) return;
+    const { input } = this.voice(pan, heavy ? 0.30 : 0.22);
+    this.noiseBurst(input, heavy ? 0.20 : 0.13, 'bandpass', (heavy ? 1100 : 1900) * this.jitter(0.15),
+      2.2, (t) => Math.sin(t * Math.PI) * 0.55);
+  }
+
+  /** Refused input: a short muted thud, the sound of nothing happening. */
+  denied(pan: number): void {
+    if (!this.allow('denied', 0.18)) return;
+    const { input } = this.voice(pan, 0.24);
+    this.noiseBurst(input, 0.05, 'lowpass', 420, 1.2, (t) => Math.pow(1 - t, 2.2) * 0.5);
+    this.tone(input, 'sine', 96, 70, 0.07, 0.18);
+  }
+
   /** Bodywork on bodywork at speed. */
   scrape(power: number, pan: number): void {
     if (!this.allow('scrape', 0.14)) return;

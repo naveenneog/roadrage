@@ -55,13 +55,13 @@ off by default and can be enabled in Settings (iOS will ask permission).
 ## Testing
 
 ```bash
-npm test           # 212 unit, simulation and regression tests
+npm test           # 231 unit, simulation, combat and regression tests
 npm run typecheck  # tsc --noEmit, strict
 npm run coverage
 npm run gate       # the ironclad gate: the definition of done
 ```
 
-Four harnesses beyond the unit tests:
+Five harnesses beyond the unit tests:
 
 ```bash
 npm run balance                # plays every circuit with an AI driver at the
@@ -69,11 +69,19 @@ npm run balance                # plays every circuit with an AI driver at the
 npm run qa                     # Playwright: real playthrough across four
                                # viewports — console errors, FPS, overflow,
                                # screenshots to ./qa
+npm run qa:ui                  # every screen at three viewports, failing on
+                               # clipped, unreachable or overlapping elements
 npm run qa:campaign            # walks the Auto Rickshaw Edition end to end
 node scripts/qa-circuits.mjs   # one frame from each of the nine circuits,
                                # checked for contrast so a fogged-out or
                                # blacked-out circuit cannot ship
 ```
+
+`qa:ui` exists because every other harness passed while all twenty-seven cards
+on the garage, circuits and campaign screens were painting through each other.
+Its important check is not "is anything clipped" — a fix that turns clipping
+into overlap passes that — but "does any element paint through its sibling",
+which is what a person actually sees.
 
 The balance harness is how the game is tuned. It drives the player with the same
 `think()` the rivals use and reports whether each circuit is actually finishable:

@@ -3,6 +3,7 @@ import { cameraDepthForFov, cameraPositionFor, fogFactor, project } from '../cor
 import type { CircuitSpec } from '../data/types.ts';
 import type { Race } from '../game/race.ts';
 import type { Racer } from '../game/racer.ts';
+import { attackPhase } from '../game/racer.ts';
 import type { TrafficVehicle } from '../game/traffic.ts';
 import { DEFAULT_ROAD_WIDTH, SEGMENT_LENGTH, type Road, type Segment } from '../track/road.ts';
 import { SpriteAtlas } from './atlas.ts';
@@ -399,14 +400,19 @@ export class Renderer {
 
   private frameFor(racer: Racer): BikeFrameOptions {
     const lean = clamp(Math.round(racer.lean * 2), -2, 2);
-    let action: 0 | 1 | 2 = 0;
+    let action: 0 | 1 | 2 | 3 = 0;
     let side: -1 | 1 = 1;
     if (racer.attack) {
-      action = racer.attack.kind === 'punch' ? 1 : 2;
+      const phase = attackPhase(racer);
+      // Anticipation gets its own cocked-arm pose; the strike and the
+      // follow-through share the extended one.
+      action = phase === 'windup' ? 3 : racer.attack.kind === 'punch' ? 1 : 2;
       side = racer.attack.direction >= 0 ? 1 : -1;
     }
     return {
-      lean: racer.attack ? 0 : lean,
+      // A rider mid-swing is still cornering. Zeroing the lean snapped the bike
+      // bolt upright the instant you pressed a button, which read as a glitch.
+      lean: racer.attack ? clamp(Math.round(racer.lean), -1, 1) : lean,
       action,
       actionSide: side,
       down: racer.isDown,

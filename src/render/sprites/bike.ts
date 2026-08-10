@@ -15,8 +15,13 @@ import { darken, lighten, luminance, mix, withAlpha } from '../palette.ts';
 export interface BikeFrameOptions {
   /** -2..2: full left lock through upright to full right lock. */
   lean: number;
-  /** 0 = no swing, 1 = mid punch, 2 = mid kick. */
-  action: 0 | 1 | 2;
+  /**
+   * 0 = no swing, 1 = punch strike, 2 = kick strike, 3 = arm cocked back.
+   *
+   * The windup pose matters more than it looks: a swing that snaps straight to
+   * full extension has no anticipation, and reads as a decal being toggled on.
+   */
+  action: 0 | 1 | 2 | 3;
   /** Which side the rider is swinging toward. */
   actionSide: -1 | 1;
   /** True while the rider is down, which draws a wreck instead. */
@@ -273,16 +278,26 @@ const drawRider = (
   // a distinct limb against the torso instead of merging into one blob.
   const armY = torsoTop + 0.085;
   const swing = options.action;
+  // Action 3 is the wind-up: the arm is cocked back across the body and drawn
+  // in tight, so the strike frame that follows reads as a release.
+  const winding = swing === 3;
   const armDark = darken(jacket, 0.62);
   for (const side of [-1, 1] as const) {
     const swinging = swing > 0 && side === options.actionSide;
-    const reach = swinging ? (swing === 2 ? 0.34 : 0.27) : halfBody * 1.20;
-    const drop = swinging ? (swing === 2 ? 0.10 : 0.0) : 0.11;
+    const striking = swinging && !winding;
+    // A cocked arm pulls back past the torso; a striking arm extends past it.
+    const reach = striking ? (swing === 2 ? 0.34 : 0.27)
+      : swinging ? halfBody * 0.34
+      : halfBody * 1.20;
+    const drop = striking ? (swing === 2 ? 0.10 : 0.0)
+      : swinging ? -0.035
+      : 0.11;
     const shoulderX = tx + side * halfBody * 0.82;
     const handX = 0.5 + side * reach + (swinging ? 0 : shift * 0.4);
-    // Upper arm then forearm, with a bend at the elbow.
-    const elbowX = (shoulderX + handX) / 2 + side * 0.018;
-    const elbowY = armY + drop * 0.45 + 0.022;
+    // Upper arm then forearm, with a bend at the elbow. The cocked arm bends
+    // the other way, which is what makes it read as loaded rather than limp.
+    const elbowX = (shoulderX + handX) / 2 + side * (swinging && winding ? 0.052 : 0.018);
+    const elbowY = armY + drop * 0.45 + (winding && swinging ? 0.040 : 0.022);
     const core = swinging ? lighten(jacket, 0.34) : lighten(jacket, 0.12);
     p.line(shoulderX, armY, elbowX, elbowY, armDark, 0.068);
     p.line(elbowX, elbowY, handX, armY + drop, armDark, 0.058);
@@ -647,7 +662,7 @@ export const BIKE_FRAMES: readonly BikeFrameOptions[] = (() => {
       frames.push({ lean, action: 0, actionSide: 1, down: false, lamp });
     }
   }
-  for (const action of [1, 2] as const) {
+  for (const action of [1, 2, 3] as const) {
     for (const actionSide of [-1, 1] as const) {
       frames.push({ lean: 0, action, actionSide, down: false, lamp: 0 });
     }

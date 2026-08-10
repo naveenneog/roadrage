@@ -7,7 +7,7 @@ import { RoadBuilder, type Road, type TrackOp } from '../track/road.ts';
 import { populateScenery } from '../track/scenery.ts';
 import { applyCatchup, RIVAL_NAMES, think, tierForDifficulty } from './ai.ts';
 import {
-  attackForButton, beginAttack, resolveHit, resolveShunt, type CombatContext,
+  attackForButton, beginAttack, detectWhiff, resolveHit, resolveShunt, type CombatContext,
 } from './combat.ts';
 import { knockDown, stepRacer, type Controls, type StepResult } from './physics.ts';
 import { Racer } from './racer.ts';
@@ -226,9 +226,12 @@ export class Race {
       if (racer !== this.player) applyCatchup(racer, this.player, this.road, dt);
 
       if (racer === this.player && !racer.isBusy) {
-        if (controls.punch) beginAttack(racer, attackForButton(racer, 'punch'), this.aimDirection(racer));
-        else if (controls.kick) beginAttack(racer, 'kick', this.aimDirection(racer));
+        if (controls.punch) beginAttack(racer, attackForButton(racer, 'punch'), this.aimDirection(racer), this.bus);
+        else if (controls.kick) beginAttack(racer, 'kick', this.aimDirection(racer), this.bus);
       }
+      // A swing that has left its active frames without landing is a miss, and
+      // the rider needs to be told so before the recovery ends.
+      detectWhiff(racer, this.combatContext);
 
       const before = racer.lap;
       stepRacer(racer, this.road, input, dt, this.stepResult);

@@ -20,12 +20,27 @@ export interface CombatContext {
 /**
  * Try to start a swing. Returns false when the rider is busy, winded or downed —
  * the stamina cost is what stops kick-spam from being the only strategy.
+ *
+ * A refused swing emits `attack:denied` when a bus is supplied. Silently doing
+ * nothing when the player presses a button is the worst possible feedback: they
+ * cannot tell the input was received, let alone why it did not work.
  */
-export const beginAttack = (racer: Racer, kind: AttackKind, direction: number): boolean => {
-  if (racer.isBusy) return false;
+export const beginAttack = (
+  racer: Racer,
+  kind: AttackKind,
+  direction: number,
+  bus?: EventBus<GameEvents>,
+): boolean => {
+  if (racer.isBusy) {
+    bus?.emit('attack:denied', { reason: 'busy', byPlayer: racer.kind === 'player' });
+    return false;
+  }
   const requested = kind === 'weapon' && !racer.weapon ? 'punch' : kind;
   const profile = ATTACKS[requested];
-  if (racer.stamina < profile.stamina) return false;
+  if (racer.stamina < profile.stamina) {
+    bus?.emit('attack:denied', { reason: 'winded', byPlayer: racer.kind === 'player' });
+    return false;
+  }
 
   racer.stamina = clamp(racer.stamina - profile.stamina, 0, 100);
   racer.attack = {
@@ -34,6 +49,27 @@ export const beginAttack = (racer: Racer, kind: AttackKind, direction: number): 
     elapsed: 0,
     resolved: false,
   };
+  return true;
+};
+
+/**
+ * Fire `attack:whiff` for any swing that has just left its active frames without
+ * connecting. Called once per racer per frame from the race loop.
+ *
+ * Missing has to cost something the player can perceive, otherwise the optimal
+ * strategy is to mash the button forever and read the health bars for feedback.
+ */
+export const detectWhiff = (racer: Racer, ctx: CombatContext): boolean => {
+  const swing = racer.attack;
+  if (!swing || swing.resolved || swing.whiffed) return false;
+  const profile = ATTACKS[swing.kind];
+  if (swing.elapsed <= profile.windup + profile.active) return false;
+  swing.whiffed = true;
+  ctx.bus.emit('attack:whiff', {
+    kind: swing.kind,
+    pan: clamp(racer.x - ctx.cameraX, -1, 1),
+    byPlayer: racer.kind === 'player',
+  });
   return true;
 };
 

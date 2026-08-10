@@ -58,6 +58,10 @@ export interface ImpactEvent {
  */
 export type GameEvents = {
   'impact': ImpactEvent;
+  /** A swing that completed its active frames without touching anyone. */
+  'attack:whiff': { kind: 'punch' | 'kick' | 'weapon'; pan: number; byPlayer: boolean };
+  /** A swing the rider could not start, and why. */
+  'attack:denied': { reason: 'winded' | 'busy'; byPlayer: boolean };
   'rider:down': { racerId: number; byPlayer: boolean; pan: number };
   'bike:crash': { racerId: number; speed: number };
   'race:start': { circuitId: string; laps: number };

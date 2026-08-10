@@ -1,9 +1,9 @@
 import { formatTime, ordinal, toKmh } from '../core/math.ts';
 import type { SaveData } from '../core/storage.ts';
-import { BIKES, getBike } from '../data/bikes.ts';
+import { getBike } from '../data/bikes.ts';
 import { CAREER_ORDER, CIRCUITS, getCircuit } from '../data/circuits.ts';
-import type { BikeSpec, CircuitSpec } from '../data/types.ts';
-import { statBars } from '../game/tuning.ts';
+import type { CircuitSpec } from '../data/types.ts';
+import { Garage } from './garage.ts';
 
 export type ScreenId =
   | 'title' | 'garage' | 'circuits' | 'results' | 'paused' | 'settings' | 'story' | 'campaign';
@@ -48,6 +48,7 @@ const rupees = (amount: number): string => `₹${amount.toLocaleString('en-IN')}
 export class Screens {
   private readonly root: HTMLElement;
   private current: ScreenId | null = null;
+  private garageView: Garage | null = null;
 
   constructor(root: HTMLElement, private readonly actions: ScreenActions) {
     this.root = root;
@@ -59,17 +60,25 @@ export class Screens {
 
   hide(): void {
     this.current = null;
+    this.garageView?.dispose();
+    this.garageView = null;
     this.root.replaceChildren();
   }
 
   show(screen: ScreenId, payload?: unknown): void {
+    // The garage runs an animation loop; leaving it attached to a detached
+    // canvas would keep a rAF alive for the rest of the session.
+    if (this.current === 'garage' && screen !== 'garage') {
+      this.garageView?.dispose();
+      this.garageView = null;
+    }
     this.current = screen;
     this.root.replaceChildren();
     const save = this.actions.save();
 
     switch (screen) {
       case 'title': this.root.append(this.title(save)); break;
-      case 'garage': this.root.append(this.garage(save)); break;
+      case 'garage': this.root.append(this.garage()); break;
       case 'circuits': this.root.append(this.circuits(save)); break;
       case 'campaign': this.root.append(this.campaign(save)); break;
       case 'results': this.root.append(this.results(payload as ResultsPayload)); break;
@@ -87,6 +96,26 @@ export class Screens {
     const node = el('section', 'screen');
     node.id = `screen-${id}`;
     return node;
+  }
+
+  /**
+   * A selectable card: a plain block slot, a button inside it, and a flex body
+   * inside that.
+   *
+   * All three layers are load-bearing. A `<button>` will not size to its own
+   * content while it *is* the grid item — the track gets a bogus intrinsic
+   * height and every card is either clipped to it or paints straight through
+   * the card below. Putting an ordinary block between the grid and the button
+   * restores normal sizing, and the inner body carries the flex layout the
+   * button cannot. `qa-ui.mjs` fails the build if this regresses.
+   */
+  private card(): { slot: HTMLElement; card: HTMLButtonElement; body: HTMLElement } {
+    const slot = el('div', 'card-slot');
+    const card = el('button', 'card');
+    const body = el('span', 'card-body');
+    card.append(body);
+    slot.append(card);
+    return { slot, card, body };
   }
 
   /* ─────────────────────────── title ─────────────────────────── */
@@ -139,69 +168,15 @@ export class Screens {
 
   /* ─────────────────────────── garage ─────────────────────────── */
 
-  private garage(save: SaveData): HTMLElement {
-    const node = this.screen('garage');
-    node.append(el('h1', 'title', 'GARAGE'));
-    node.append(el('p', 'tagline', `${rupees(save.cash)} in hand. Specifications are the real ones.`));
-
-    const list = el('div', 'card-list');
-    for (const bike of BIKES) {
-      if (bike.class === 'auto') continue;
-      list.append(this.bikeCard(bike, save));
-    }
-    node.append(list);
-
-    const row = el('div', 'row');
-    const back = el('button', 'ghost', '← Back');
-    back.addEventListener('click', () => this.actions.show('title'));
-    row.append(back);
-    node.append(row);
-    return node;
-  }
-
-  private bikeCard(bike: BikeSpec, save: SaveData): HTMLElement {
-    const owned = save.ownedBikes.includes(bike.id);
-    const selected = save.currentBike === bike.id;
-    const affordable = save.cash >= bike.price;
-
-    const card = el('button', 'card');
-    card.setAttribute('aria-pressed', String(selected));
-    card.disabled = !owned && !affordable;
-
-    card.append(el('span', 'maker', bike.maker));
-    card.append(el('span', 'name', bike.name));
-    card.append(el('span', 'meta',
-      `${bike.cc}cc · ${bike.bhp} bhp · ${bike.weightKg} kg · ${bike.topSpeedKmh} km/h · ${bike.era}`));
-    card.append(el('span', 'blurb', bike.blurb));
-
-    const bars = el('div', 'bars');
-    const stats = statBars(bike, BIKES.filter((b) => b.class !== 'auto'));
-    for (const [label, value] of Object.entries(stats)) {
-      const bar = el('div', 'bar');
-      bar.append(el('span', undefined, label));
-      const track = el('span', 'track');
-      const fill = el('i');
-      fill.style.width = `${Math.round(value * 100)}%`;
-      track.append(fill);
-      bar.append(track);
-      bars.append(bar);
-    }
-    card.append(bars);
-    card.append(el('span', 'note', bike.note));
-
-    if (!owned) {
-      card.append(el('span', affordable ? 'cash' : 'locked',
-        affordable ? `Buy · ${rupees(bike.price)}` : `Locked · ${rupees(bike.price)}`));
-    } else if (selected) {
-      card.append(el('span', 'maker', '✓ Selected'));
-    }
-
-    card.addEventListener('click', () => {
-      if (owned) this.actions.selectBike(bike.id);
-      else if (!this.actions.buyBike(bike.id)) return;
-      this.show('garage');
+  private garage(): HTMLElement {
+    this.garageView?.dispose();
+    this.garageView = new Garage({
+      buyBike: (id) => this.actions.buyBike(id),
+      selectBike: (id) => this.actions.selectBike(id),
+      save: () => this.actions.save(),
+      back: () => this.actions.show('title'),
     });
-    return card;
+    return this.garageView.build();
   }
 
   /* ─────────────────────────── circuits ─────────────────────────── */
@@ -236,29 +211,29 @@ export class Screens {
     const unlocked = save.unlockedCircuits.includes(circuit.id);
     const best = save.bestTimes[circuit.id];
 
-    const card = el('button', 'card');
+    const { slot, card, body } = this.card();
     card.disabled = !unlocked || save.cash < circuit.entryFee;
 
-    card.append(el('span', 'maker', `${circuit.city} · ${'★'.repeat(circuit.difficulty)}`));
-    card.append(el('span', 'name', circuit.name));
-    card.append(el('span', 'meta',
+    body.append(el('span', 'maker', `${circuit.city} · ${'★'.repeat(circuit.difficulty)}`));
+    body.append(el('span', 'name', circuit.name));
+    body.append(el('span', 'meta',
       `${circuit.location} · ${circuit.laps} lap${circuit.laps > 1 ? 's' : ''} · ${circuit.timeOfDay}`));
-    card.append(el('span', 'blurb', circuit.blurb));
-    card.append(el('span', 'note', circuit.note));
+    body.append(el('span', 'blurb', circuit.blurb));
+    body.append(el('span', 'note', circuit.note));
 
     if (!unlocked) {
-      card.append(el('span', 'locked', 'Locked — win the previous event'));
+      body.append(el('span', 'locked', 'Locked — win the previous event'));
     } else {
-      card.append(el('span', 'cash',
+      body.append(el('span', 'cash',
         `Purse ${rupees(circuit.purse)}${circuit.entryFee ? ` · Entry ${rupees(circuit.entryFee)}` : ' · Free entry'}`));
-      if (best) card.append(el('span', 'meta', `Best ${formatTime(best)}`));
-      if (save.cash < circuit.entryFee) card.append(el('span', 'locked', 'Not enough cash'));
+      if (best) body.append(el('span', 'meta', `Best ${formatTime(best)}`));
+      if (save.cash < circuit.entryFee) body.append(el('span', 'locked', 'Not enough cash'));
     }
 
     card.addEventListener('click', () => {
       this.actions.startRace(circuit.id, save.currentBike);
     });
-    return card;
+    return slot;
   }
 
   /* ─────────────────────────── campaign ─────────────────────────── */
@@ -274,14 +249,14 @@ export class Screens {
     for (let i = 0; i < CAMPAIGN_CHAPTERS.length; i++) {
       const chapter = CAMPAIGN_CHAPTERS[i] as CampaignChapter;
       const unlocked = i <= save.storyChapter;
-      const card = el('button', 'card');
+      const { slot, card, body } = this.card();
       card.disabled = !unlocked;
-      card.append(el('span', 'maker', `Chapter ${i + 1} · ${getCircuit(chapter.circuitId).city}`));
-      card.append(el('span', 'name', chapter.title));
-      card.append(el('span', 'blurb', chapter.premise));
-      if (!unlocked) card.append(el('span', 'locked', 'Locked'));
+      body.append(el('span', 'maker', `Chapter ${i + 1} · ${getCircuit(chapter.circuitId).city}`));
+      body.append(el('span', 'name', chapter.title));
+      body.append(el('span', 'blurb', chapter.premise));
+      if (!unlocked) body.append(el('span', 'locked', 'Locked'));
       card.addEventListener('click', () => this.actions.startCampaign(i));
-      list.append(card);
+      list.append(slot);
     }
     node.append(list);
 

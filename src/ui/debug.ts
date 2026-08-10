@@ -1,5 +1,6 @@
 import type { GameLoop } from '../core/loop.ts';
 import type { Race } from '../game/race.ts';
+import { attackPhase } from '../game/racer.ts';
 import type { SpriteAtlas } from '../render/atlas.ts';
 
 /**
@@ -21,6 +22,11 @@ export interface DebugSnapshot {
   x: number;
   lap: number;
   down: boolean;
+  /** Which part of a swing the player is in, or null when not swinging. */
+  attack: string | null;
+  /** Which attack is being thrown, so harnesses can tell a punch from a kick. */
+  attackKind: string | null;
+  stamina: number;
   /** Distance to the nearest vehicle ahead, or -1 when the road is clear. */
   hazardDz: number;
   hazardX: number;
@@ -78,6 +84,9 @@ export const buildDebugSnapshot = (
     x: race?.player.x ?? 0,
     lap: race?.player.lap ?? 0,
     down: race?.player.isDown ?? false,
+    attack: race ? attackPhase(race.player) : null,
+    attackKind: race?.player.attack?.kind ?? null,
+    stamina: Math.round(race?.player.stamina ?? 0),
     hazardDz: Number.isFinite(hazardDz) ? Math.round(hazardDz) : -1,
     hazardX,
     hazardWidth,
