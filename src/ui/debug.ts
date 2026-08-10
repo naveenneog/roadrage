@@ -1,6 +1,7 @@
 import type { GameLoop } from '../core/loop.ts';
 import type { Race } from '../game/race.ts';
 import { attackPhase } from '../game/racer.ts';
+import { SEGMENT_LENGTH } from '../track/road.ts';
 import type { SpriteAtlas } from '../render/atlas.ts';
 
 /**
@@ -33,6 +34,10 @@ export interface DebugSnapshot {
   hazardWidth: number;
   /** True when that vehicle is coming the other way, and so closing far faster. */
   hazardOncoming: boolean;
+  /** Nearest road-surface hazard ahead: 'pothole', 'breaker', 'warn' or null. */
+  roadHazard: string | null;
+  /** Segments to that hazard, or -1 when the road ahead is clean. */
+  roadHazardIn: number;
   simMs: number;
   drawMs: number;
   sprites: number;
@@ -73,6 +78,27 @@ export const buildDebugSnapshot = (
     }
   }
 
+  let roadHazard: string | null = null;
+  let roadHazardIn = -1;
+  if (race) {
+    // Look the same distance ahead a rider would be reading the road at speed.
+    const segs = race.road.segments;
+    const base = Math.floor(race.player.z / SEGMENT_LENGTH);
+    for (let k = 2; k < 40; k++) {
+      const s = segs[(base + k) % segs.length];
+      if (!s) continue;
+      if (s.hazard === 'pothole' || s.hazard === 'breaker') {
+        roadHazard = s.hazard;
+        roadHazardIn = k;
+        break;
+      }
+      if (s.warn > 0.5 && roadHazard === null) {
+        roadHazard = 'warn';
+        roadHazardIn = k;
+      }
+    }
+  }
+
   return {
     mode,
     screen,
@@ -91,6 +117,8 @@ export const buildDebugSnapshot = (
     hazardX,
     hazardWidth,
     hazardOncoming,
+    roadHazard,
+    roadHazardIn,
     simMs: Number(loop.stats.simMs.toFixed(2)),
     drawMs: Number(loop.stats.drawMs.toFixed(2)),
     sprites: atlas.size,

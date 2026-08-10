@@ -122,8 +122,75 @@ describe('sprite registries', () => {
   });
 });
 
-describe('player bike geometry', () => {
-  // The renderer draws the player's rear wheel as a separate, spinnable sprite
+describe('road hazards are announced before you reach them', () => {
+  // Potholes and speed breakers were simulated and drawn long before this, but
+  // a breaker is a two-segment hump with no run-up: at 140 km/h it arrived
+  // before it was visible, which makes it a coin toss rather than a hazard.
+  // The builder now paints an approach, and these lock that in.
+  it('lays a painted run-up in front of every speed breaker', () => {
+    const { road } = build('shivajinagar');
+    const breakers = road.segments.filter((s) => s.hazard === 'breaker');
+    expect(breakers.length).toBeGreaterThan(0);
+
+    for (let i = 0; i < road.segments.length; i++) {
+      const s = road.segments[i] as (typeof road.segments)[number];
+      if (s.hazard !== 'breaker') continue;
+      // Somewhere in the run-up behind this hump there must be warning paint.
+      const runUp = road.segments.slice(Math.max(0, i - 16), i);
+      if (runUp.some((r) => r.hazard === 'breaker')) continue; // mid-hump segment
+      expect(runUp.some((r) => r.warn > 0), `breaker at ${i} has no run-up`).toBe(true);
+    }
+  });
+
+  it('ramps the warning up toward the hump rather than flat-lining', () => {
+    const { road } = build('shivajinagar');
+    const warned = road.segments.filter((s) => s.warn > 0);
+    expect(warned.length).toBeGreaterThan(10);
+    // Intensity is a 0..1 nearness, so both faint and full-strength must occur.
+    expect(warned.some((s) => s.warn < 0.4)).toBe(true);
+    expect(warned.some((s) => s.warn > 0.9)).toBe(true);
+    for (const s of warned) {
+      expect(s.warn).toBeGreaterThan(0);
+      expect(s.warn).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('leaves clean road clean — warnings are not smeared over the whole lap', () => {
+    const { road } = build('shivajinagar');
+    const warned = road.segments.filter((s) => s.warn > 0).length;
+    expect(warned / road.segments.length).toBeLessThan(0.25);
+  });
+
+  it('keeps potholes off the racing line often enough to be dodgeable', () => {
+    // A pothole you cannot go around is a tax, not a hazard.
+    const { road } = build('shivajinagar');
+    const holes = road.segments.filter((s) => s.hazard === 'pothole');
+    expect(holes.length).toBeGreaterThan(0);
+    expect(holes.some((s) => Math.abs(s.hazardOffset) > 0.3)).toBe(true);
+  });
+
+  it('keeps every pothole on the tarmac where it can be seen and hit', () => {
+    // The scatter used to reach 1.4 half-widths, which put 28% of potholes past
+    // the kerb entirely: the player's x is clamped to the road, so those could
+    // never be hit, and they were painted out on the verge where they read as
+    // scenery. The old "some are off-centre" check passed throughout. This is
+    // the invariant that actually matters — the painted rim reaches 0.26, so
+    // the centre has to stay inside 0.74 for the whole hole to sit on the road.
+    for (const spec of CIRCUITS) {
+      const { road } = build(spec.id);
+      const holes = road.segments.filter((s) => s.hazard === 'pothole');
+      for (const hole of holes) {
+        expect(Math.abs(hole.hazardOffset) + 0.26, `${spec.id} pothole off the tarmac`)
+          .toBeLessThanOrEqual(1);
+      }
+    }
+    // And at least one circuit has to actually have some, or this proves nothing.
+    const { road } = build('shivajinagar');
+    expect(road.segments.filter((s) => s.hazard === 'pothole').length).toBeGreaterThan(0);
+  });
+});
+
+describe('player bike geometry', () => {  // The renderer draws the player's rear wheel as a separate, spinnable sprite
   // and needs the body painter to leave a hole in exactly the right place. The
   // two agree only through wheelAnchor, so these are the invariants that keep
   // the wheel from ending up buried behind the bodywork or floating off it.

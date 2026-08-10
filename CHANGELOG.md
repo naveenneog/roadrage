@@ -2,6 +2,44 @@
 
 All notable changes to Road Rash Bharat. Newest first.
 
+## 0.8.0 — hazards you can see coming
+
+Potholes and speed breakers had been simulated, painted and scripted into every
+circuit since the first release. All of that worked. None of it was visible.
+
+### Fixed
+
+- **28% of potholes were off the road entirely.** The scatter reached 1.4 road
+  half-widths while the player's own lateral position is clamped to 1.0, so
+  better than a quarter of them sat past the kerb where they could never be hit,
+  painted out on the verge where they read as scenery rather than as a hole. A
+  further 47% had their rim hanging over the edge. Offsets are now bounded so
+  the whole hole stays on the tarmac.
+  - The test covering this asserted that *some* potholes were off-centre, which
+    the broken version passed comfortably. It now asserts the invariant that
+    matters — every hole, on every circuit, entirely on the road.
+- **A speed breaker filled the screen with flat yellow.** The hump is five
+  segments deep and every one of them was painted solid full width, so at close
+  range the road simply turned yellow. The paint now runs as yellow-and-black
+  bands *along* the direction of travel, in phase across the whole hump, which
+  reads as painted markings on a bump.
+  - An intermediate version shifted the band phase per segment. That makes a
+    chequerboard, which at point-blank range is unmistakably a finish line.
+
+### Added
+
+- **Speed breakers warn you.** Fourteen segments of painted run-up fade in ahead
+  of every hump, with chevrons at the edges of the carriageway brightening as it
+  nears — which is what a real breaker approach is marked with, when it is
+  marked at all. Previously the hump appeared with no notice at all, making it a
+  coin toss rather than a hazard.
+- **Potholes are drawn rim-first.** A dark hole on dark tarmac has no edge to
+  catch the eye. Broken tarmac crumbles pale, so the pale rim is painted first
+  and the hole drawn inside it — the edge is what makes it read at speed.
+- `roadHazard` and `roadHazardIn` on the debug snapshot, so a harness can
+  photograph the road at a known distance from a known hazard instead of hoping
+  a screenshot lands on one.
+
 ## 0.7.0 — the rider comes off properly
 
 ### Changed

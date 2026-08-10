@@ -46,22 +46,51 @@ const drawHazard = (
   p1: { x: number; y: number; w: number },
   p2: { x: number; y: number; w: number },
 ): void => {
+  // Painted run-up to a breaker. Drawn before the hazard itself so the hump's
+  // own bar sits on top of it.
+  if (segment.warn > 0 && !segment.hazard) {
+    const a = 0.10 + segment.warn * 0.35;
+    quad(ctx, p1.x, p1.y, p1.w * 0.92, p2.x, p2.y, p2.w * 0.92,
+      withAlpha('#e8c02a', a * 0.30));
+    // Two chevron bars pointing at the bump, brightening as it nears.
+    for (const side of [-1, 1] as const) {
+      const o1 = side * p1.w * 0.44;
+      const o2 = side * p2.w * 0.44;
+      quad(ctx, p1.x + o1, p1.y, p1.w * 0.16, p2.x + o2, p2.y, p2.w * 0.16,
+        withAlpha('#f2d24a', a));
+    }
+  }
+
   switch (segment.hazard) {
     case 'breaker': {
       // Painted yellow-and-black bar across the carriageway — usually the only
       // warning an Indian speed breaker gives you, when it gives one at all.
+      //
+      // The bands run *along* the direction of travel and stay in phase across
+      // every segment of the hump, so the paint reads as one continuous striped
+      // ramp. Shifting the phase per segment instead makes a chequerboard, which
+      // at point-blank range looks like a finish line rather than a bump.
       quad(ctx, p1.x, p1.y, p1.w, p2.x, p2.y, p2.w, '#e8c02a');
-      const step = p1.w / 4;
-      for (let i = -2; i < 2; i += 2) {
-        quad(ctx, p1.x + i * step, p1.y, step * 0.5,
-          p2.x + i * (p2.w / 4), p2.y, (p2.w / 4) * 0.5, '#1c1e22');
+      const bands = 8;
+      for (let i = 1; i < bands; i += 2) {
+        const centre = -1 + (i * 2 + 1) / bands;
+        quad(ctx,
+          p1.x + centre * p1.w, p1.y, p1.w / bands,
+          p2.x + centre * p2.w, p2.y, p2.w / bands,
+          '#1c1e22');
       }
       break;
     }
     case 'pothole': {
       const cx1 = p1.x + segment.hazardOffset * p1.w;
       const cx2 = p2.x + segment.hazardOffset * p2.w;
-      quad(ctx, cx1, p1.y, p1.w * 0.16, cx2, p2.y, p2.w * 0.16, '#15171b');
+      // A dark hole on dark tarmac is invisible. What actually makes a pothole
+      // readable at speed is its edge: broken tarmac crumbles pale, and the
+      // near lip catches the light. Rim first, then the hole inside it.
+      quad(ctx, cx1, p1.y, p1.w * 0.26, cx2, p2.y, p2.w * 0.26,
+        withAlpha('#b9ac93', 0.55));
+      quad(ctx, cx1, p1.y, p1.w * 0.21, cx2, p2.y, p2.w * 0.21, '#3a3227');
+      quad(ctx, cx1, p1.y, p1.w * 0.17, cx2, p2.y, p2.w * 0.17, '#101216');
       break;
     }
     case 'oil':
@@ -174,7 +203,8 @@ export const paintSegment = (
     }
   }
 
-  if (segment.hazard) drawHazard(ctx, segment, p1, p2);
+  // Warning segments have no hazard of their own, so both conditions matter.
+  if (segment.hazard || segment.warn > 0) drawHazard(ctx, segment, p1, p2);
 
   // Distance fog, laid over each quad so it costs nothing extra. The colour
   // comes from the sky's own haze, so the far end of the road always melts into

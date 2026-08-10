@@ -19,6 +19,18 @@ export interface SceneryItem {
   layer: number;
 }
 
+/** How many segments of painted run-up a speed breaker gets. */
+const WARN_SEGMENTS = 14;
+
+/**
+ * Furthest a pothole's centre may sit from the road centre, in half-widths.
+ *
+ * The painted rim reaches 0.26 either side of centre, so anything past this
+ * hangs over the kerb. A hole off the tarmac is one the player can neither see
+ * nor hit — it is not a hazard, just wasted paint.
+ */
+const POTHOLE_REACH = 0.72;
+
 export interface Segment {
   index: number;
   p1: ProjectedPoint;
@@ -31,6 +43,15 @@ export interface Segment {
   hazard: HazardKind | null;
   /** Lateral centre of the hazard, in road half-widths. */
   hazardOffset: number;
+  /**
+   * 0..1 warning intensity for a hazard a short way ahead.
+   *
+   * Set on the segments approaching a speed breaker so the road itself can warn
+   * you, the way a painted approach does in real life. Without it a breaker is
+   * invisible until you are on it, which at 140 km/h is not a hazard so much as
+   * a coin toss.
+   */
+  warn: number;
   scenery: SceneryItem[];
   /** Alternates every RUMBLE_LENGTH segments to give the road its moving stripes. */
   light: boolean;
@@ -91,6 +112,7 @@ export class RoadBuilder {
       surface: this.currentSurface,
       hazard: null,
       hazardOffset: 0,
+      warn: 0,
       scenery: [],
       light: Math.floor(n / RUMBLE_LENGTH) % 2 === 1,
       looped: false,
@@ -158,7 +180,10 @@ export class RoadBuilder {
         const count = op.count ?? 3;
         const gap = op.gap ?? 8;
         for (let i = 0; i < count; i++) {
-          // A speed breaker is a short, sharp rise and fall — you feel it, you don't see it coming.
+          // A speed breaker is a short, sharp rise and fall. Real ones are
+          // painted on the approach, so the road warns you before the bump —
+          // mark the run-up before laying the hump itself.
+          this.markApproach(WARN_SEGMENTS);
           this.addRoad(2, 1, 2, 0, 9);
           this.markLast(5, 'breaker', 0);
           this.addRoad(2, 1, 2, 0, -9);
@@ -179,8 +204,9 @@ export class RoadBuilder {
           const h = Math.sin(i * 12.9898) * 43758.5453;
           const r = h - Math.floor(h);
           if (r < density) {
+            const s = Math.sin(i * 78.233) * 43758.5453;
             segment.hazard = 'pothole';
-            segment.hazardOffset = ((Math.sin(i * 78.233) * 43758.5453) % 1) * 1.4;
+            segment.hazardOffset = (2 * (s - Math.floor(s)) - 1) * POTHOLE_REACH;
           }
         }
         break;
@@ -217,6 +243,20 @@ export class RoadBuilder {
       }
     }
     return this;
+  }
+
+  /**
+   * Paint a warning run-up onto the segments already laid, fading in toward
+   * whatever is about to be placed. Strongest immediately before the hazard.
+   */
+  private markApproach(count: number): void {
+    const first = Math.max(0, this.segments.length - count);
+    for (let i = first; i < this.segments.length; i++) {
+      const segment = this.segments[i];
+      if (!segment) continue;
+      const nearness = (i - first + 1) / count;
+      segment.warn = Math.max(segment.warn, nearness);
+    }
   }
 
   private markLast(count: number, hazard: HazardKind, offset: number): void {
