@@ -1,0 +1,29 @@
+# Ironclad: secrets never enter git
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# QA artifacts — every harness writes to a qa-prefixed directory
+qa*/
+coverage/
+test-results/
+playwright-report/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Recorded footage (large binaries; regenerate with npm run record)
+media/*.mp4
+media/*.webm
+media/*.gif

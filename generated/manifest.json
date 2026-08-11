@@ -1,0 +1,32 @@
+{
+  "skyline-bengaluru": {
+    "size": "1536x1024",
+    "bytes": 1403151,
+    "model": "gpt-image-2",
+    "generatedAt": "2026-08-08T08:34:30.245Z"
+  },
+  "skyline-mumbai-night": {
+    "size": "1536x1024",
+    "bytes": 958907,
+    "model": "gpt-image-2",
+    "generatedAt": "2026-08-08T08:11:40.935Z"
+  },
+  "skyline-ghat-monsoon": {
+    "size": "1536x1024",
+    "bytes": 939810,
+    "model": "gpt-image-2",
+    "generatedAt": "2026-08-08T08:13:13.379Z"
+  },
+  "skyline-goa-dusk": {
+    "size": "1536x1024",
+    "bytes": 1060849,
+    "model": "gpt-image-2",
+    "generatedAt": "2026-08-08T08:14:32.749Z"
+  },
+  "skyline-delhi-night": {
+    "size": "1536x1024",
+    "bytes": 1273617,
+    "model": "gpt-image-2",
+    "generatedAt": "2026-08-08T08:16:07.089Z"
+  }
+}
