@@ -2,6 +2,8 @@
 
 **Play it: <https://naveenneog.github.io/roadrage/>**
 
+![Racing through Shivajinagar at dusk](media/hero.jpg)
+
 **Street bike combat racing through Indian cities.** A pseudo-3D arcade racer in
 the 16-bit street-racing tradition — you win by riding fast and by kicking the
 person next to you into a BEST bus at 140 km/h.
@@ -11,10 +13,14 @@ Shivajinagar, the Ghodbunder arterial and the Yeoor ghat in Thane, SB Road in
 Pune at midnight, Marine Drive, Malshej Ghat in monsoon, coastal Goa, and the
 galis of Chandni Chowk.
 
+![Chasing down a rival, with the Vidhana Soudha and St Mary's on the skyline](media/race.jpg)
+
 Thirteen machines, every specification real: the Hero Splendor, the Yamaha
 RX 100 and RD 350, the Yezdi Roadking and Roadster, the Royal Enfield Classic 350
 and Interceptor 650, Bajaj Pulsars, the TVS Apache, the Jawa 42, the KTM 390
 Duke — and a Bajaj RE auto rickshaw with three wheels and a tipping problem.
+
+![The garage, with the selected machine on a lit stage](media/garage.jpg)
 
 And **Night Fare**, the Auto Rickshaw Edition: six chapters of a night-time
 chase thriller in which you are an auto driver with a passenger in the back who

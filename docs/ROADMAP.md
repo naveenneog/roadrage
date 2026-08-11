@@ -88,9 +88,18 @@ Ranked by what the player would notice first.
   files, 15% against a floor of 15%. The next source file added fails the gate.
   The thin areas are `render/` and `ui/`, which is also where the last several
   bugs actually were.
-- [ ] **The repository has no demo.** `media/` is gitignored and the footage in it
-  predates the garage, the taunts, the monuments, the rider rebuild, the road
-  hazards and the rename. Re-record and commit a compressed clip or hero still
-  so the README shows the game to somebody who has not run it.
+- [ ] **The demo footage is stale.** Stills are done — `media/hero.jpg`,
+  `garage.jpg` and `race.jpg` are shot from the deployed build and shown in the
+  README. The moving footage is not: `media/gameplay.mp4` is gitignored and
+  dates from before the garage, the taunts, the monuments, the rider rebuild,
+  the road hazards and the rename. Re-record once P-25 and P-26 land so the clip
+  actually shows them.
+- [ ] **Near buildings render see-through.** `nearFade` in `render/renderer.ts`
+  fades roadside props to *zero* alpha as they approach the near cull, and the
+  props nearest that cull are the largest on screen — so the biggest buildings
+  are the most transparent and you see the skyline through a shopfront. Both the
+  comment above the alpha and the one on `SCENERY_FADE_Z` already call this
+  backwards; the short fade band was a mitigation, not a fix. Visible in
+  `media/hero.jpg`.
 
 Reviewed at every milestone boundary against what actually shipped.
