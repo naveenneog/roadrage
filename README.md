@@ -1,5 +1,7 @@
 # RoadRage
 
+**Play it: <https://naveenneog.github.io/roadrage/>**
+
 **Street bike combat racing through Indian cities.** A pseudo-3D arcade racer in
 the 16-bit street-racing tradition — you win by riding fast and by kicking the
 person next to you into a BEST bus at 140 km/h.
@@ -31,6 +33,17 @@ npm run dev        # http://localhost:5173
 npm run build      # typecheck + production bundle into dist/
 npm run preview    # serve the production build
 ```
+
+## Publishing
+
+```bash
+npm run deploy     # build, then push dist/ to the gh-pages branch
+```
+
+Live at <https://naveenneog.github.io/roadrage/>. Vite's `base` is `'./'`, so
+every asset path is relative and the bundle works unchanged from a project
+subpath, a domain root or a `file://` open. It installs as a PWA and, once
+loaded, plays offline — the painted skylines are precached with the code.
 
 Everything is generated at runtime — there is not a single image, audio or font
 file in the repository. The whole game is about 200 KB of JavaScript.
