@@ -1,12 +1,37 @@
 # Status
 
-**Active packet:** P-21 — rider damage feedback: the bike visibly degrades as
-damage climbs (bent bars, smoke, a dragging pipe).
+**Active packet:** P-25 — hazard and impact audio: potholes and speed breakers
+jolt the bike and take damage, but make no sound at all.
 
-P-20 Road hazards you can actually see is complete and the project sits at a
-milestone boundary.
+P-24 RoadRage, published is complete and the project sits at a milestone
+boundary.
 
-## Acceptance criteria for P-20 (met)
+## Acceptance criteria for P-24 (met)
+
+- Given the game, when it is opened anywhere, then it is called RoadRage — title
+  screen, window title, PWA install name and manifest all agree.
+- Given a career saved before the rename, when the renamed build loads, then the
+  cash, wins, garage and selected bike are all still there.
+- Given a save wipe, when the game reloads, then the pre-rename career does not
+  come back.
+- Given the published URL, when it is opened cold, then the game boots, races
+  and reports zero console errors.
+
+## What proves it
+
+```
+npm test                                     239 passed
+npm run typecheck                            clean, strict
+npm run build                                clean
+npm run qa:ui                                15/15 screen x viewport, 0 issues
+node scripts/qa.mjs (production bundle)      4/4 viewports, 56-60 fps, 0 errors
+node scripts/qa.mjs (live Pages URL)         HTTP 200, racing, 53 fps, 0 errors
+node .ironclad/gate.mjs --stage packet       exit 0, 25 passed, 0 warned
+```
+
+Live at <https://naveenneog.github.io/roadrage/>, deployed with `npm run deploy`.
+
+## Acceptance criteria for P-23 (met)
 
 - Given a speed breaker ahead, when it is roughly fifteen segments away, then
   painted warning chevrons are already visible on the approach.
@@ -15,20 +40,6 @@ milestone boundary.
   a chequered finish line.
 - Given any circuit, when its potholes are placed, then every one sits entirely
   on the tarmac, where it can be both seen and hit.
-
-## What proves it
-
-```
-npm test                                     236 passed
-npm run typecheck                            clean, strict
-npm run build                                clean
-npm run qa:ui                                15/15 screen x viewport, 0 issues
-node scripts/qa.mjs                          4/4 viewports, 52-60 fps, 0 errors
-node scripts/qa-campaign.mjs                 Auto Rickshaw Edition, 11/11 checks
-node scripts/qa-circuits.mjs                 9/9 circuits render with contrast
-npx vite-node scripts/balance.ts             9/9 circuits completable
-node .ironclad/gate.mjs --stage packet       exit 0, 24 passed, 1 warned
-```
 
 Hazard visibility was judged from captured frames rather than asserted. A probe
 drives the circuit and photographs the road at eight fixed distances from the
