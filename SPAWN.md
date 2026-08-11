@@ -28,10 +28,10 @@ Copy everything between the rules into spawn.co/create.
 
 ---
 
-Build **Road Rash Bharat** — a pseudo-3D arcade motorcycle combat racer set on
-real Indian streets. Think Road Rash on the Mega Drive: rear-view, sprite-scaling
-road, and you win by riding fast *and* by punching and kicking the riders next to
-you off their bikes.
+Build **RoadRage** — a pseudo-3D arcade motorcycle combat racer set on real
+Indian streets. Think 16-bit rear-view street racing: sprite-scaling road, and
+you win by riding fast *and* by punching and kicking the riders next to you off
+their bikes.
 
 **Core loop, and it must be fun inside thirty seconds:** you are already moving
 when it loads. Hold throttle, weave through traffic, pull alongside a rival,

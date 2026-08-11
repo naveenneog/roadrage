@@ -1,6 +1,32 @@
 # Changelog
 
-All notable changes to Road Rash Bharat. Newest first.
+All notable changes to RoadRage. Newest first.
+
+## 0.9.0 — RoadRage
+
+### Changed
+
+- **The game is now RoadRage.** It shipped as *Road Rash Bharat*, which borrowed
+  a name EA has held since 1991. The game has never been a clone of it — the
+  circuits, machines, traffic, language and the entire Auto Rickshaw Edition are
+  original — so the borrowed name was doing nothing except inviting a trademark
+  problem the moment it was published anywhere public.
+  - Title screen, window title, PWA manifest, install name, package and charter
+    all follow.
+  - References to the genre's originator survive where they are honest
+    attribution: the research note crediting Louis Gorenfeld's write-up of the
+    pseudo-3D technique this engine uses, and the design comments explaining
+    what a given decision was reaching for.
+- **Saved careers survive the rename.** The save key moved from
+  `roadrash-bharat/save/v1` to `roadrage/save/v1`, and a rename that changes a
+  storage key without a fallback silently resets every existing player to a
+  default garage — which arrives as a bug report about lost progress, not as a
+  rename. The old key is read as a fallback, the current key wins when both
+  exist, and a wipe clears both so an old career cannot resurrect.
+
+### Added
+
+- **Published to GitHub Pages**, with `npm run deploy` for subsequent releases.
 
 ## 0.8.0 — hazards you can see coming
 

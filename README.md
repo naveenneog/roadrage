@@ -1,8 +1,8 @@
-# Road Rash Bharat
+# RoadRage
 
 **Street bike combat racing through Indian cities.** A pseudo-3D arcade racer in
-the Road Rash tradition — you win by riding fast and by kicking the person next
-to you into a BEST bus at 140 km/h.
+the 16-bit street-racing tradition — you win by riding fast and by kicking the
+person next to you into a BEST bus at 140 km/h.
 
 Nine circuits drawn from real streets: Commercial Street and Russell Market in
 Shivajinagar, the Ghodbunder arterial and the Yeoor ghat in Thane, SB Road in

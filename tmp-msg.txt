@@ -1,0 +1,28 @@
+Rename to RoadRage
+
+The game shipped as Road Rash Bharat, borrowing a name EA has held since
+1991. It has never been a clone: the circuits, machines, traffic, language and
+the entire Auto Rickshaw Edition are original, so the borrowed name was doing
+nothing but inviting a trademark problem the moment it went public.
+
+Title screen, window title, PWA manifest and install name, package, charter
+and docs all follow. References to the genre's originator survive where they
+are honest attribution rather than branding: the note crediting Louis
+Gorenfeld's write-up of the pseudo-3D technique this engine uses, and the
+design comments explaining what a decision was reaching for.
+
+Saved careers survive the move. The key went from roadrash-bharat/save/v1 to
+roadrage/save/v1, and changing a storage key without a fallback silently
+resets every existing player to a default garage — which arrives as a bug
+report about lost progress, not as a rename. The old key is read as a
+fallback, the current key wins when both exist, and a wipe clears both so an
+old career cannot resurrect. Three tests cover those cases.
+
+Also adds gh-pages and an `npm run deploy` script, and clears a high-severity
+advisory in a transitive dev dependency it pulled in.
+
+npm test 239 passed; typecheck and build clean; qa.mjs 4/4 viewports against
+the production bundle at 56-60 fps; gate PASS 25/0/0.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+Copilot-Session: 5b13f521-407e-4457-9771-a8a7e59f4115

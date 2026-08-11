@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
-        name: 'Road Rash Bharat',
-        short_name: 'RR Bharat',
+        name: 'RoadRage',
+        short_name: 'RoadRage',
         description: 'Street bike combat racing through Indian cities.',
         theme_color: '#0b0d12',
         background_color: '#0b0d12',

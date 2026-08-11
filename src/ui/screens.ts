@@ -124,8 +124,8 @@ export class Screens {
     const node = this.screen('title');
 
     const h1 = el('h1', 'title');
-    h1.append(document.createTextNode('ROAD RASH'));
-    h1.append(el('span', 'accent', 'BHARAT'));
+    h1.append(document.createTextNode('ROAD'));
+    h1.append(el('span', 'accent', 'RAGE'));
     node.append(h1);
 
     node.append(el('p', 'tagline',

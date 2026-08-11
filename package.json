@@ -1,13 +1,14 @@
 {
-  "name": "road-rash-bharat",
+  "name": "roadrage",
   "private": true,
-  "version": "0.3.0",
-  "description": "Street bike combat racing through Indian cities. A pseudo-3D arcade racer in the Road Rash tradition.",
+  "version": "0.9.0",
+  "description": "Street bike combat racing through Indian cities. A pseudo-3D arcade racer on real streets in Bengaluru, Thane, Pune, Mumbai, Delhi, Goa and the Western Ghats.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "deploy": "npm run build && npx gh-pages -d dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.3",
     "@vitest/coverage-v8": "^4.1.10",
+    "gh-pages": "^6.3.0",
     "playwright": "^1.62.1",
     "typescript": "^7.0.2",
     "vite": "^8.2.0",

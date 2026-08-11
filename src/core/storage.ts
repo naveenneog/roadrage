@@ -2,7 +2,15 @@
  * localStorage-backed save with a schema version and total failure tolerance —
  * private-mode Safari throws on write, and that must never take the game down.
  */
-const KEY = 'roadrash-bharat/save/v1';
+const KEY = 'roadrage/save/v1';
+
+/**
+ * The key this game saved under before it was renamed from Road Rash Bharat.
+ * Read as a fallback so a rename does not silently wipe someone's career; the
+ * next write lands on the current key and the old one is only cleared when the
+ * player asks for a wipe.
+ */
+const LEGACY_KEY = 'roadrash-bharat/save/v1';
 
 export interface SaveData {
   version: 1;
@@ -83,7 +91,7 @@ const reconcile = (stored: unknown): SaveData => {
 
 export const loadSave = (): SaveData => {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY);
     if (!raw) return defaultSave();
     return reconcile(JSON.parse(raw));
   } catch {
@@ -102,6 +110,8 @@ export const writeSave = (data: SaveData): void => {
 export const clearSave = (): void => {
   try {
     localStorage.removeItem(KEY);
+    // Both, or the pre-rename save would come back on the next load.
+    localStorage.removeItem(LEGACY_KEY);
   } catch {
     /* nothing to recover from */
   }

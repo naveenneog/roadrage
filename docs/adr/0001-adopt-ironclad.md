@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-07
 - **Packet:** P-0 (setup)
-- **Deciders:** Road Rash Bharat maintainers + Ironclad council
+- **Deciders:** RoadRage maintainers + Ironclad council
 
 ## Context
 This project is built largely through AI-assisted sessions. That makes two failure modes far more

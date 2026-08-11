@@ -64,7 +64,7 @@ await page.waitForFunction(() => Boolean(window.__game), null, { timeout: 15_000
 
 // Unlock the career so any circuit is reachable, and pick a quick machine.
 await page.evaluate(() => {
-  localStorage.setItem('roadrash-bharat/save/v1', JSON.stringify({
+  localStorage.setItem('roadrage/save/v1', JSON.stringify({
     version: 1,
     cash: 5_000_000,
     ownedBikes: ['splendor', 'rx100', 'classic350', 'pulsar220', 'ns200', 'rd350', 'duke390', 'interceptor'],

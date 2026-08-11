@@ -1,7 +1,7 @@
 {
   "_readme": "The machine-checkable half of this project's contract. Enforced by .ironclad/gate.mjs. Loosening anything here requires an ADR stating why (anti-drift M1).",
   "version": 1,
-  "name": "Road Rash Bharat",
+  "name": "RoadRage",
   "strictness": "standard",
   "commands": {
     "test": "npm run test",

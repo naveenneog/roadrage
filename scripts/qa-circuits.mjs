@@ -34,7 +34,7 @@ await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 });
 
 // Unlock the whole ladder and buy the fast bike so every circuit is reachable.
 await page.evaluate((ids) => {
-  localStorage.setItem('roadrash-bharat/save/v1', JSON.stringify({
+  localStorage.setItem('roadrage/save/v1', JSON.stringify({
     version: 1,
     cash: 5_000_000,
     ownedBikes: ['splendor', 'rx100', 'pulsar220', 'ns200', 'duke390', 'interceptor'],

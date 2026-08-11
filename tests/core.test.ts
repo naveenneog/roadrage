@@ -215,7 +215,7 @@ describe('save data', () => {
   it('survives corrupt JSON rather than taking the game down', () => {
     const storage = memoryStorage();
     withStorage(storage, () => {
-      storage.setItem('roadrash-bharat/save/v1', '{ not json at all');
+      storage.setItem('roadrage/save/v1', '{ not json at all');
       expect(() => loadSave()).not.toThrow();
       expect(loadSave().cash).toBe(defaultSave().cash);
     });
@@ -224,7 +224,7 @@ describe('save data', () => {
   it('merges an older, partial save over the defaults', () => {
     const storage = memoryStorage();
     withStorage(storage, () => {
-      storage.setItem('roadrash-bharat/save/v1', JSON.stringify({ cash: 99, wins: 3 }));
+      storage.setItem('roadrage/save/v1', JSON.stringify({ cash: 99, wins: 3 }));
       const loaded = loadSave();
       expect(loaded.cash).toBe(99);
       expect(loaded.wins).toBe(3);
@@ -237,7 +237,7 @@ describe('save data', () => {
   it('repairs a save whose selected bike is not owned', () => {
     const storage = memoryStorage();
     withStorage(storage, () => {
-      storage.setItem('roadrash-bharat/save/v1', JSON.stringify({
+      storage.setItem('roadrage/save/v1', JSON.stringify({
         ownedBikes: ['rx100'], currentBike: 'duke390',
       }));
       const loaded = loadSave();
@@ -248,13 +248,51 @@ describe('save data', () => {
   it('repairs a save with an empty garage or no unlocked circuits', () => {
     const storage = memoryStorage();
     withStorage(storage, () => {
-      storage.setItem('roadrash-bharat/save/v1', JSON.stringify({
+      storage.setItem('roadrage/save/v1', JSON.stringify({
         ownedBikes: [], unlockedCircuits: [], cash: Number.NaN,
       }));
       const loaded = loadSave();
       expect(loaded.ownedBikes.length).toBeGreaterThan(0);
       expect(loaded.unlockedCircuits.length).toBeGreaterThan(0);
       expect(Number.isFinite(loaded.cash)).toBe(true);
+    });
+  });
+
+  it('carries a career across the rename instead of wiping it', () => {
+    // The game saved under 'roadrash-bharat/save/v1' before it became RoadRage.
+    // Changing the key without a fallback silently resets everyone's career to
+    // a default garage and 12,000 rupees, which looks exactly like a bug report
+    // about lost progress.
+    const storage = memoryStorage();
+    withStorage(storage, () => {
+      storage.setItem('roadrash-bharat/save/v1', JSON.stringify({
+        cash: 87_500, wins: 14, ownedBikes: ['splendor', 'rx100'], currentBike: 'rx100',
+      }));
+      const loaded = loadSave();
+      expect(loaded.cash).toBe(87_500);
+      expect(loaded.wins).toBe(14);
+      expect(loaded.currentBike).toBe('rx100');
+    });
+  });
+
+  it('prefers the current save when both keys are present', () => {
+    const storage = memoryStorage();
+    withStorage(storage, () => {
+      storage.setItem('roadrash-bharat/save/v1', JSON.stringify({ cash: 1 }));
+      storage.setItem('roadrage/save/v1', JSON.stringify({ cash: 2 }));
+      expect(loadSave().cash).toBe(2);
+    });
+  });
+
+  it('a wipe clears the pre-rename save too', () => {
+    // Otherwise the old career resurrects on the next load and the wipe looks
+    // like it silently failed.
+    const storage = memoryStorage();
+    withStorage(storage, () => {
+      storage.setItem('roadrash-bharat/save/v1', JSON.stringify({ cash: 99_999 }));
+      storage.setItem('roadrage/save/v1', JSON.stringify({ cash: 99_999 }));
+      clearSave();
+      expect(loadSave().cash).toBe(defaultSave().cash);
     });
   });
 

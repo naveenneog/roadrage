@@ -1,4 +1,4 @@
-# Road Rash Bharat — Charter
+# RoadRage — Charter
 
 > The prose half of the contract. The machine-checkable half is `.ironclad/charter.json`,
 > enforced by `node .ironclad/gate.mjs`. When the two disagree, one of them is a bug.
